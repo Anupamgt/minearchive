@@ -1,0 +1,11 @@
+.users-title {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.users-table-wrapper {
+  border: 1px solid var(--border);
+}

@@ -1,0 +1,57 @@
+.nodes-title {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.nodes-table-wrapper {
+  border: 1px solid var(--border);
+}
+
+.approve-btn {
+  background: none;
+  border: 1px solid var(--green);
+  color: var(--green);
+  padding: 3px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  margin-right: 4px;
+}
+
+.approve-btn:hover {
+  background: var(--green);
+  color: #fff;
+}
+
+.reject-btn {
+  background: none;
+  border: 1px solid var(--red);
+  color: var(--red);
+  padding: 3px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.reject-btn:hover {
+  background: var(--red);
+  color: #fff;
+}
+
+.action-link {
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 12px;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.action-link:hover {
+  text-decoration: underline;
+}
+
+.action-link + .action-link {
+  margin-left: 10px;
+}
