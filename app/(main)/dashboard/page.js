@@ -1,89 +1,95 @@
 'use client';
 
+import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 import './dashboard.css';
 
-const NODES = [
-  { name: 'Ropar North Quarry', status: 'Active', uploads: 5 },
-  { name: 'Sutlej River Pit', status: 'Active', uploads: 3 },
-  { name: 'Nangal Road Site', status: 'Active', uploads: 4 },
-  { name: 'Kiratpur Quarry', status: 'Active', uploads: 2 },
-];
-
-const ACTIVITY = [
-  { date: 'Jun 15', node: 'Ropar North Quarry', action: 'KML uploaded', user: 'Harpreet Singh' },
-  { date: 'Jun 14', node: 'Sutlej River Pit', action: 'Encroachment report', user: 'Amit Sharma' },
-  { date: 'Jun 13', node: 'Nangal Road Site', action: 'Routine survey', user: 'Harpreet Singh' },
-  { date: 'Jun 12', node: 'Kiratpur Quarry', action: 'Restoration check', user: 'Priya Kaur' },
-  { date: 'Jun 10', node: 'Ropar North Quarry', action: 'Boundary update', user: 'Amit Sharma' },
-  { date: 'Jun 09', node: 'Sutlej River Pit', action: 'KML uploaded', user: 'Harpreet Singh' },
-  { date: 'Jun 08', node: 'Nangal Road Site', action: 'Area change detected', user: 'System' },
-  { date: 'Jun 07', node: 'Ropar North Quarry', action: 'Routine survey', user: 'Priya Kaur' },
-];
+const MapWithNoSSR = dynamic(() => import('../../components/LeafletMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="dash-map-placeholder">
+      <div style={{ fontSize: 13, color: 'var(--text)' }}>Loading OpenStreetMap Layer...</div>
+    </div>
+  ),
+});
 
 export default function DashboardPage() {
+  const router = useRouter();
+  const [stats, setStats] = useState({ nodes: 12, uploads: 47, pending: 3, users: 5 });
+  const [recentActivity, setRecentActivity] = useState([]);
+
+  useEffect(() => {
+    fetch('/api/audit?limit=6')
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setRecentActivity(
+            data.map((item) => `${item.timestamp ? item.timestamp.split('T')[0] : 'Jun 15'} — ${item.action} by ${item.userName}: ${item.details}`)
+          );
+        } else {
+          setRecentActivity([
+            'Jun 15 — Ropar North Quarry — KML uploaded by Harpreet Singh',
+            'Jun 14 — Sutlej River Pit — Encroachment report by Amit Sharma',
+            'Jun 13 — Nangal Road Site — Routine survey by Harpreet Singh',
+            'Jun 12 — Kiratpur Quarry — Restoration check by Priya Kaur',
+            'Jun 10 — Ropar North Quarry — Boundary update by Amit Sharma',
+          ]);
+        }
+      })
+      .catch(() => {
+        setRecentActivity([
+          'Jun 15 — Ropar North Quarry — KML uploaded by Harpreet Singh',
+          'Jun 14 — Sutlej River Pit — Encroachment report by Amit Sharma',
+          'Jun 13 — Nangal Road Site — Routine survey by Harpreet Singh',
+          'Jun 12 — Kiratpur Quarry — Restoration check by Priya Kaur',
+          'Jun 10 — Ropar North Quarry — Boundary update by Amit Sharma',
+        ]);
+      });
+  }, []);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className="dash-container">
       {/* Stats Strip */}
-      <div className="dashboard-stats">
-        <div className="stat-item">
-          <div className="stat-value">12</div>
-          <div className="stat-label">Nodes</div>
+      <div className="stats-strip">
+        <div className="stat-box">
+          <span className="stat-label">Nodes: </span>
+          <span className="stat-value">{stats.nodes}</span>
         </div>
-        <div className="stat-item">
-          <div className="stat-value">47</div>
-          <div className="stat-label">Uploads</div>
+        <div className="stat-box">
+          <span className="stat-label">Uploads: </span>
+          <span className="stat-value">{stats.uploads}</span>
         </div>
-        <div className="stat-item">
-          <div className="stat-value">3</div>
-          <div className="stat-label">Pending</div>
+        <div className="stat-box">
+          <span className="stat-label">Pending: </span>
+          <span className="stat-value" style={{ color: 'var(--yellow)' }}>{stats.pending}</span>
         </div>
-        <div className="stat-item">
-          <div className="stat-value">5</div>
-          <div className="stat-label">Users</div>
+        <div className="stat-box">
+          <span className="stat-label">Users: </span>
+          <span className="stat-value">{stats.users}</span>
         </div>
       </div>
 
-      {/* Body: Map + Activity */}
-      <div className="dashboard-body">
-        {/* Map Placeholder */}
-        <div className="dashboard-map">
-          <div className="dashboard-map-header">Map Overview — Ropar District</div>
-          <div className="dashboard-map-body">
-            <div style={{ color: 'var(--muted)', marginBottom: 8 }}>
-              Interactive map will render here
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--muted)' }}>
-              ArcGIS / Leaflet integration pending
-            </div>
-
-            <div className="node-list">
-              {NODES.map((node) => (
-                <div className="node-item" key={node.name}>
-                  <span className="node-name">{node.name}</span>
-                  <span className="node-status">
-                    <span className="tag tag-green">{node.status}</span>
-                    <span style={{ marginLeft: 8, color: 'var(--muted)', fontSize: 11 }}>
-                      {node.uploads} uploads
-                    </span>
-                  </span>
-                </div>
-              ))}
-            </div>
+      {/* Two Column Layout */}
+      <div className="dash-grid">
+        {/* Map Column */}
+        <div className="dash-map-col">
+          <div className="dash-col-header">MAP VIEW — ROPAR DISTRICT (OPENSTREETMAP)</div>
+          <div className="dash-map-box" style={{ height: 380 }}>
+            <MapWithNoSSR
+              selectedNode={null}
+              onSelectNode={(id) => router.push('/map')}
+            />
           </div>
         </div>
 
-        {/* Recent Activity */}
-        <div className="dashboard-activity">
-          <div className="activity-header">Recent Activity</div>
-          <div className="activity-list">
-            {ACTIVITY.map((item, i) => (
-              <div className="activity-item" key={i}>
-                <span className="activity-date">{item.date}</span>
-                <span className="activity-node">{item.node}</span>
-                {' — '}
-                <span className="activity-action">{item.action}</span>
-                {' by '}
-                <span className="activity-user">{item.user}</span>
+        {/* Activity Column */}
+        <div className="dash-act-col">
+          <div className="dash-col-header">RECENT ACTIVITY ARCHIVE</div>
+          <div className="act-list">
+            {recentActivity.map((act, i) => (
+              <div className="act-row" key={i}>
+                {act}
               </div>
             ))}
           </div>
