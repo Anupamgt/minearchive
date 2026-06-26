@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgis/postgis:15-3.3
+    environment:
+      POSTGRES_USER: minearchive_user
+      POSTGRES_PASSWORD: minearchive_pass
+      POSTGRES_DB: minearchive_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - minearchive_db_data:/var/lib/postgresql/data
+    restart: always
+
+volumes:
+  minearchive_db_data:

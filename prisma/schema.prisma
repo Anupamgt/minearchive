@@ -1,0 +1,91 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String     @id @default(uuid())
+  name         String
+  email        String     @unique
+  passwordHash String
+  role         String     @default("user") // admin, user
+  status       String     @default("active") // active, disabled
+  lastLogin    DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  
+  auditLogs    AuditLog[]
+}
+
+model Node {
+  id            String    @id @default(uuid())
+  name          String    @unique
+  description   String?
+  status        String    @default("proposed") // active, proposed, archived
+  locationLabel String?
+  createdBy     String?
+  approvedBy    String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  uploads       Upload[]
+}
+
+model Upload {
+  id           String    @id @default(uuid())
+  nodeId       String?
+  node         Node?     @relation(fields: [nodeId], references: [id])
+  uploadedBy   String?
+  uploadDate   DateTime  @default(now())
+  surveyDate   DateTime?
+  category     String?
+  notes        String?
+  kmlFilePath  String?
+  
+  isDeleted    Boolean   @default(false)
+  deletedBy    String?
+  deletedAt    DateTime?
+
+  geometries   UploadGeometry[]
+  attachments  UploadAttachment[]
+}
+
+// Prisma doesn't natively support PostGIS geometry columns well. 
+// We use Unsupported("geometry") and raw SQL for queries.
+model UploadGeometry {
+  id              String   @id @default(uuid())
+  uploadId        String
+  upload          Upload   @relation(fields: [uploadId], references: [id])
+  
+  // Storing geometry as Unsupported
+  geom            Unsupported("geometry(Polygon, 4326)")?
+  
+  areaHectares    Float?
+  perimeterMeters Float?
+}
+
+model UploadAttachment {
+  id           String   @id @default(uuid())
+  uploadId     String
+  upload       Upload   @relation(fields: [uploadId], references: [id])
+  filePath     String
+  fileType     String
+  fileSize     Int
+  originalName String
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  targetType String?
+  targetId   String?
+  details    String?
+  ipAddress  String?
+  timestamp  DateTime @default(now())
+}
