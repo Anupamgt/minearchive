@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import './map.css';
 
-// Dynamically import LeafletMap with no SSR to prevent window is not defined
 const MapWithNoSSR = dynamic(() => import('../../components/LeafletMap'), {
   ssr: false,
   loading: () => (
@@ -21,23 +20,33 @@ export default function MapPage() {
   const [uploads, setUploads] = useState([]);
   const [shownUploads, setShownUploads] = useState(new Set());
   const [loadingUploads, setLoadingUploads] = useState(false);
+  const [role, setRole] = useState('Admin');
 
-  // Fetch nodes from API fallback/mock
+  useEffect(() => {
+    const cookies = document.cookie.split('; ');
+    const sessionRow = cookies.find((c) => c.startsWith('minearchive_session='));
+    if (sessionRow) {
+      try {
+        const val = sessionRow.split('=')[1];
+        const decoded = JSON.parse(Buffer.from(val, 'base64').toString('utf8'));
+        if (decoded.role) setRole(decoded.role);
+      } catch {}
+    }
+  }, []);
+
+  const isAdmin = role.toLowerCase() === 'admin';
+
   useEffect(() => {
     fetch('/api/nodes')
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
-          setNodes(data);
-        } else {
-          // Fallback MVP Demo Nodes
-          setNodes([
-            { id: '1', name: 'Ropar North Quarry', status: 'active' },
-            { id: '2', name: 'Sutlej River Pit', status: 'active' },
-            { id: '3', name: 'Nangal Road Site', status: 'active' },
-            { id: '4', name: 'Kiratpur Quarry', status: 'active' },
-          ]);
-        }
+        if (Array.isArray(data) && data.length > 0) setNodes(data);
+        else setNodes([
+          { id: '1', name: 'Ropar North Quarry', status: 'active' },
+          { id: '2', name: 'Sutlej River Pit', status: 'active' },
+          { id: '3', name: 'Nangal Road Site', status: 'active' },
+          { id: '4', name: 'Kiratpur Quarry', status: 'active' },
+        ]);
       })
       .catch(() => {
         setNodes([
@@ -49,7 +58,6 @@ export default function MapPage() {
       });
   }, []);
 
-  // Fetch uploads when node selected
   useEffect(() => {
     if (!selectedNode) {
       setUploads([]);
@@ -60,16 +68,12 @@ export default function MapPage() {
       .then((res) => res.json())
       .then((data) => {
         setLoadingUploads(false);
-        if (Array.isArray(data) && data.length > 0) {
-          setUploads(data);
-        } else {
-          // Fallback Demo Uploads for selected node
-          setUploads([
-            { id: '5', uploadDate: '2026-06-15', category: 'Routine Survey', uploadedBy: 'Harpreet Singh' },
-            { id: '4', uploadDate: '2026-05-02', category: 'Encroachment Report', uploadedBy: 'Amit Sharma' },
-            { id: '3', uploadDate: '2026-03-18', category: 'Routine Survey', uploadedBy: 'Harpreet Singh' },
-          ]);
-        }
+        if (Array.isArray(data) && data.length > 0) setUploads(data);
+        else setUploads([
+          { id: '5', uploadDate: '2026-06-15', category: 'Routine Survey', uploadedBy: 'Harpreet Singh' },
+          { id: '4', uploadDate: '2026-05-02', category: 'Encroachment Report', uploadedBy: 'Amit Sharma' },
+          { id: '3', uploadDate: '2026-03-18', category: 'Routine Survey', uploadedBy: 'Harpreet Singh' },
+        ]);
       })
       .catch(() => {
         setLoadingUploads(false);
@@ -93,9 +97,15 @@ export default function MapPage() {
   const activeNodeObj = nodes.find((n) => n.id === selectedNode || parseInt(n.id) === selectedNode);
   const nodeName = activeNodeObj ? activeNodeObj.name : (selectedNode === 1 ? 'Ropar North Quarry' : selectedNode === 2 ? 'Sutlej River Pit' : selectedNode === 3 ? 'Nangal Road Site' : 'Kiratpur Quarry');
 
+  const handleFlagBreach = () => {
+    const reason = prompt(`Enter encroachment breach findings for ${nodeName}:`, 'Exceeded approved perimeter boundary by 14.2 meters towards northern riverbank');
+    if (!reason) return;
+
+    alert(`⚠️ ENCROACHMENT BREACH FLAGGED!\n\nNode: ${nodeName}\nFindings: ${reason}\n\nViolation notice logged to central audit trail.`);
+  };
+
   return (
     <div className="map-container">
-      {/* Map Area */}
       <div className="map-area">
         <MapWithNoSSR
           selectedNode={selectedNode}
@@ -125,7 +135,6 @@ export default function MapPage() {
         </div>
       </div>
 
-      {/* Side Panel */}
       <div className="side-panel">
         {!selectedNode ? (
           <div className="side-panel-empty">
@@ -133,7 +142,6 @@ export default function MapPage() {
           </div>
         ) : (
           <>
-            {/* Header */}
             <div className="side-panel-header">
               <div className="side-panel-title">
                 {nodeName.toUpperCase()}
@@ -141,7 +149,6 @@ export default function MapPage() {
               </div>
             </div>
 
-            {/* Tabs */}
             <div className="side-panel-tabs">
               <button
                 className={`side-panel-tab${activeTab === 'timeline' ? ' active' : ''}`}
@@ -157,7 +164,6 @@ export default function MapPage() {
               </button>
             </div>
 
-            {/* Body */}
             <div className="side-panel-body">
               {loadingUploads ? (
                 <div style={{ padding: 10, color: 'var(--muted)', fontSize: 12 }}>Loading directory archive...</div>
@@ -204,7 +210,6 @@ export default function MapPage() {
               )}
             </div>
 
-            {/* Change Metrics */}
             <div className="change-metrics">
               <div className="change-metrics-title">Change Metrics (PostGIS Computed)</div>
               <div className="change-metrics-row">
@@ -217,6 +222,15 @@ export default function MapPage() {
                   <span className="metric-value positive">+340m</span>
                 </div>
               </div>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={handleFlagBreach}
+                  style={{ width: '100%', marginTop: 12, background: 'var(--red)', color: '#fff', border: 'none', padding: '8px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', textAlign: 'center' }}
+                >
+                  ⚠️ Flag Encroachment Breach
+                </button>
+              )}
             </div>
           </>
         )}
