@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Ropar North Quarry Monitoring Survey</name>
+    <description>Routine GPS perimeter survey of Sector 1 mining enclosure boundaries along Sutlej river basin.</description>
+    <Placemark>
+      <name>Ropar North Quarry Sector 1 Active Pit</name>
+      <description>Contractor excavation enclosure polygon captured on June 26, 2026. Area: 12.5 Hectares.</description>
+      <Style>
+        <LineStyle>
+          <color>ffcc7a00</color>
+          <width>3</width>
+        </LineStyle>
+        <PolyStyle>
+          <color>7fcc7a00</color>
+        </PolyStyle>
+      </Style>
+      <Polygon>
+        <extrude>1</extrude>
+        <altitudeMode>clampToGround</altitudeMode>
+        <outerBoundaryIs>
+          <LinearRing>
+            <coordinates>
+              76.520120,30.980450,0
+              76.540310,30.990120,0
+              76.545220,30.975340,0
+              76.530180,30.970110,0
+              76.520120,30.980450,0
+            </coordinates>
+          </LinearRing>
+        </outerBoundaryIs>
+      </Polygon>
+    </Placemark>
+    <Placemark>
+      <name>Northern Riverbank Stockpile Buffer</name>
+      <description>Proposed stockpile zone adjacent to quarry perimeter.</description>
+      <Polygon>
+        <outerBoundaryIs>
+          <LinearRing>
+            <coordinates>
+              76.541000,30.991000,0
+              76.548000,30.995000,0
+              76.550000,30.982000,0
+              76.541000,30.991000,0
+            </coordinates>
+          </LinearRing>
+        </outerBoundaryIs>
+      </Polygon>
+    </Placemark>
+  </Document>
+</kml>
