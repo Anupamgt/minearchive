@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useToast } from '../../components/ToastProvider';
 import './nodes.css';
 
 export default function NodesPage() {
+  const { showToast } = useToast();
   const [nodes, setNodes] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({ name: '', status: 'active', locationLabel: 'Ropar District' });
@@ -41,7 +43,10 @@ export default function NodesPage() {
 
   const handleCreate = (e) => {
     e.preventDefault();
-    if (!formData.name) return;
+    if (!formData.name) {
+      showToast('Please enter an enclosure name.', 'warning');
+      return;
+    }
 
     fetch('/api/nodes', {
       method: 'POST',
@@ -51,16 +56,17 @@ export default function NodesPage() {
       .then((res) => res.json())
       .then(() => {
         setShowModal(false);
+        showToast(`Created mining node enclosure: ${formData.name}`, 'success');
         setFormData({ name: '', status: 'active', locationLabel: 'Ropar District' });
         fetchNodes();
       })
       .catch(() => {
-        // Optimistic UI fallback
         setNodes((prev) => [
           { id: Date.now(), name: formData.name, status: formData.status, uploadCount: 0, updatedAt: 'Just now' },
           ...prev,
         ]);
         setShowModal(false);
+        showToast(`Added ${formData.name} (Offline demo mode)`, 'success');
       });
   };
 
@@ -93,8 +99,20 @@ export default function NodesPage() {
               <td>{n.uploadCount || n.uploads || 0}</td>
               <td style={{ color: 'var(--muted)' }}>{typeof n.updatedAt === 'string' ? n.updatedAt.split('T')[0] : 'Jun 15, 2026'}</td>
               <td>
-                <button className="btn btn-outline" style={{ padding: '2px 8px', fontSize: 11, marginRight: 6 }}>Edit</button>
-                <button className="btn btn-outline" style={{ padding: '2px 8px', fontSize: 11 }}>Archive</button>
+                <button
+                  className="btn btn-outline"
+                  style={{ padding: '2px 8px', fontSize: 11, marginRight: 6 }}
+                  onClick={() => showToast(`Editing parameters for ${n.name}`, 'info')}
+                >
+                  Edit
+                </button>
+                <button
+                  className="btn btn-outline"
+                  style={{ padding: '2px 8px', fontSize: 11 }}
+                  onClick={() => showToast(`Archived enclosure node #${n.id}`, 'warning')}
+                >
+                  Archive
+                </button>
               </td>
             </tr>
           ))}

@@ -1,9 +1,10 @@
 import './globals.css';
+import { ToastProvider } from './components/ToastProvider';
 
 export const metadata = {
-  title: 'MineArchive',
-  description: 'Mining Area Directory & Archive',
-  keywords: ['mining', 'archive', 'KML', 'directory', 'nodes'],
+  title: 'MineArchive — Mining Area Directory & Spatial Archive',
+  description: 'Enterprise spatial archive and encroachment monitoring directory for mining enclosures.',
+  keywords: ['mining', 'archive', 'KML', 'directory', 'nodes', 'PostGIS', 'encroachment'],
 };
 
 export const viewport = {
@@ -14,7 +15,11 @@ export const viewport = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <ToastProvider>
+          {children}
+        </ToastProvider>
+      </body>
     </html>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
+import { useToast } from '../../components/ToastProvider';
 import './map.css';
 
 const MapWithNoSSR = dynamic(() => import('../../components/LeafletMap'), {
@@ -14,6 +15,7 @@ const MapWithNoSSR = dynamic(() => import('../../components/LeafletMap'), {
 });
 
 export default function MapPage() {
+  const { showToast } = useToast();
   const [nodes, setNodes] = useState([]);
   const [selectedNode, setSelectedNode] = useState(null);
   const [activeTab, setActiveTab] = useState('timeline');
@@ -21,6 +23,8 @@ export default function MapPage() {
   const [shownUploads, setShownUploads] = useState(new Set());
   const [loadingUploads, setLoadingUploads] = useState(false);
   const [role, setRole] = useState('Admin');
+  const [breachModal, setBreachModal] = useState(false);
+  const [breachReason, setBreachReason] = useState('Exceeded approved perimeter boundary by 14.2 meters towards northern riverbank');
 
   useEffect(() => {
     const cookies = document.cookie.split('; ');
@@ -88,8 +92,13 @@ export default function MapPage() {
   const toggleShow = (uploadId) => {
     setShownUploads((prev) => {
       const next = new Set(prev);
-      if (next.has(uploadId)) next.delete(uploadId);
-      else next.add(uploadId);
+      if (next.has(uploadId)) {
+        next.delete(uploadId);
+        showToast(`Hidden KML layer #${uploadId}`, 'info');
+      } else {
+        next.add(uploadId);
+        showToast(`Rendering KML polygon layer #${uploadId} on OpenStreetMap`, 'success');
+      }
       return next;
     });
   };
@@ -97,11 +106,10 @@ export default function MapPage() {
   const activeNodeObj = nodes.find((n) => n.id === selectedNode || parseInt(n.id) === selectedNode);
   const nodeName = activeNodeObj ? activeNodeObj.name : (selectedNode === 1 ? 'Ropar North Quarry' : selectedNode === 2 ? 'Sutlej River Pit' : selectedNode === 3 ? 'Nangal Road Site' : 'Kiratpur Quarry');
 
-  const handleFlagBreach = () => {
-    const reason = prompt(`Enter encroachment breach findings for ${nodeName}:`, 'Exceeded approved perimeter boundary by 14.2 meters towards northern riverbank');
-    if (!reason) return;
-
-    alert(`⚠️ ENCROACHMENT BREACH FLAGGED!\n\nNode: ${nodeName}\nFindings: ${reason}\n\nViolation notice logged to central audit trail.`);
+  const confirmFlagBreach = (e) => {
+    e.preventDefault();
+    setBreachModal(false);
+    showToast(`⚠️ ENCROACHMENT BREACH FLAGGED for ${nodeName}! Violation notice logged to Central Audit Trail.`, 'error');
   };
 
   return (
@@ -112,6 +120,7 @@ export default function MapPage() {
           onSelectNode={(id) => {
             setSelectedNode(id);
             setShownUploads(new Set());
+            showToast(`Selected Enclosure: Node #${id}`, 'info');
           }}
         />
         <div className="map-node-buttons">
@@ -127,6 +136,7 @@ export default function MapPage() {
               onClick={() => {
                 setSelectedNode(n.id);
                 setShownUploads(new Set());
+                showToast(`Focused on ${n.name}`, 'info');
               }}
             >
               {n.name}
@@ -138,7 +148,9 @@ export default function MapPage() {
       <div className="side-panel">
         {!selectedNode ? (
           <div className="side-panel-empty">
-            Click a node on the OpenStreetMap layer to view its directory history
+            <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.3 }}>🗺️</div>
+            <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>No Mining Enclosure Selected</div>
+            <div>Click a polygon boundary on the OpenStreetMap layer or select a pit below to access its spatial archive directory.</div>
           </div>
         ) : (
           <>
@@ -166,7 +178,9 @@ export default function MapPage() {
 
             <div className="side-panel-body">
               {loadingUploads ? (
-                <div style={{ padding: 10, color: 'var(--muted)', fontSize: 12 }}>Loading directory archive...</div>
+                <div style={{ padding: 20, textAlign: 'center', color: 'var(--muted)', fontSize: 12 }}>
+                  <div style={{ marginBottom: 8 }}>⏳ Fetching spatial archive...</div>
+                </div>
               ) : activeTab === 'timeline' ? (
                 uploads.map((u) => (
                   <div className="timeline-entry" key={u.id}>
@@ -176,13 +190,13 @@ export default function MapPage() {
                         <span className="timeline-date">{typeof u.uploadDate === 'string' ? u.uploadDate.split('T')[0] : 'Jun 15, 2026'}</span>
                       </div>
                       <div className="timeline-category">{u.category}</div>
-                      <div className="timeline-user">{u.uploadedBy || u.user}</div>
+                      <div className="timeline-user">Uploaded by: {u.uploadedBy || u.user}</div>
                     </div>
                     <button
                       className={`timeline-show${shownUploads.has(u.id) ? ' active' : ''}`}
                       onClick={() => toggleShow(u.id)}
                     >
-                      {shownUploads.has(u.id) ? '✓ Show' : 'Show'}
+                      {shownUploads.has(u.id) ? '✓ Shown' : 'Show'}
                     </button>
                   </div>
                 ))
@@ -199,7 +213,7 @@ export default function MapPage() {
                   <tbody>
                     {uploads.map((u) => (
                       <tr key={u.id}>
-                        <td style={{ color: 'var(--accent)' }}>{u.id}</td>
+                        <td style={{ color: 'var(--accent)', fontWeight: 700 }}>#{u.id}</td>
                         <td>{typeof u.uploadDate === 'string' ? u.uploadDate.split('T')[0] : 'Jun 15, 2026'}</td>
                         <td>{u.category}</td>
                         <td style={{ color: 'var(--muted)' }}>{u.uploadedBy || u.user}</td>
@@ -214,19 +228,19 @@ export default function MapPage() {
               <div className="change-metrics-title">Change Metrics (PostGIS Computed)</div>
               <div className="change-metrics-row">
                 <div>
-                  <span className="metric-label">Area: </span>
+                  <span className="metric-label">Area Dev: </span>
                   <span className="metric-value positive">+12.3 ha (+8.2%)</span>
                 </div>
                 <div>
-                  <span className="metric-label">Perimeter: </span>
+                  <span className="metric-label">Perimeter Dev: </span>
                   <span className="metric-value positive">+340m</span>
                 </div>
               </div>
               {isAdmin && (
                 <button
                   type="button"
-                  onClick={handleFlagBreach}
-                  style={{ width: '100%', marginTop: 12, background: 'var(--red)', color: '#fff', border: 'none', padding: '8px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', textAlign: 'center' }}
+                  onClick={() => setBreachModal(true)}
+                  style={{ width: '100%', marginTop: 12, background: 'var(--red)', color: '#fff', border: 'none', padding: '10px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', textAlign: 'center', transition: 'background 0.2s' }}
                 >
                   ⚠️ Flag Encroachment Breach
                 </button>
@@ -235,6 +249,37 @@ export default function MapPage() {
           </>
         )}
       </div>
+
+      {/* Admin Breach Modal */}
+      {breachModal && (
+        <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="modal-card" style={{ background: 'var(--surface)', border: '1px solid var(--red)', padding: 24, width: 440 }}>
+            <h3 style={{ marginTop: 0, marginBottom: 12, color: 'var(--red)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span>⚠️</span> Flag Encroachment Violation
+            </h3>
+            <p style={{ fontSize: 13, color: 'var(--text)', marginBottom: 16 }}>
+              You are about to issue a formal spatial encroachment notice for <strong>{nodeName}</strong>. This event will be permanently recorded in the Central Audit Trail.
+            </p>
+            <form onSubmit={confirmFlagBreach}>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>Findings / Evidence Details</label>
+                <textarea
+                  className="input"
+                  rows="3"
+                  style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: '#fff', padding: 8 }}
+                  value={breachReason}
+                  onChange={(e) => setBreachReason(e.target.value)}
+                  required
+                />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                <button type="button" className="btn btn-outline" onClick={() => setBreachModal(false)}>Cancel</button>
+                <button type="submit" className="btn" style={{ background: 'var(--red)', color: '#fff', fontWeight: 700, padding: '8px 16px' }}>Confirm Breach Notice</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
