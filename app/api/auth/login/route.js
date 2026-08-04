@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '../../../../lib/db';
+import { setSessionCookie } from '../../../../lib/auth';
 
 export async function POST(request) {
   try {
@@ -23,8 +24,20 @@ export async function POST(request) {
       }
     }
 
-    // MVP Demo credentials check
-    if (!user || (user.passwordHash !== password && password !== 'admin123' && password !== 'user123')) {
+    // OAuth-only accounts cannot use password login
+    if (user && !user.passwordHash) {
+      return NextResponse.json(
+        { error: 'This account uses Google sign-in. Use Sign in with Google.' },
+        { status: 401 }
+      );
+    }
+
+    // MVP demo bypass — only active when explicitly enabled (local/dev).
+    // Leave ALLOW_DEMO_LOGIN unset in production so only real password hashes work.
+    const demoLoginEnabled = process.env.ALLOW_DEMO_LOGIN === 'true';
+    const demoBypass = demoLoginEnabled && (password === 'admin123' || password === 'user123');
+
+    if (!user || (user.passwordHash !== password && !demoBypass)) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
@@ -40,7 +53,7 @@ export async function POST(request) {
 
       await prisma.auditLog.create({
         data: {
-          userId: user.name || user.id,
+          userId: user.id,
           action: 'Login',
           details: `Successful session authentication (${user.role})`,
         }
@@ -49,27 +62,14 @@ export async function POST(request) {
       // DB offline fallback ignore
     }
 
-    const sessionPayload = {
+    const response = NextResponse.json({
       id: user.id,
       name: user.name,
       email: user.email,
       role: user.role,
-    };
-
-    const sessionToken = Buffer.from(JSON.stringify(sessionPayload)).toString('base64');
-
-    const response = NextResponse.json(sessionPayload);
-    
-    // Set HTTP-Only production cookie
-    response.cookies.set({
-      name: 'minearchive_session',
-      value: sessionToken,
-      httpOnly: false, // Set false for demo so client JS components can read persona role
-      path: '/',
-      maxAge: 60 * 60 * 24 * 7, // 1 week
-      sameSite: 'lax',
     });
 
+    await setSessionCookie(response, user);
     return response;
   } catch (error) {
     console.error('Login error:', error);

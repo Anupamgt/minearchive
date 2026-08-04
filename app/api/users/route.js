@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '../../../lib/db';
+import { getSessionUser, unauthorizedResponse, forbiddenResponse } from '../../../lib/auth';
 
-export async function GET() {
+export async function GET(request) {
+  const session = await getSessionUser(request);
+  if (!session) return unauthorizedResponse();
+  if (session.role?.toLowerCase() !== 'admin') return forbiddenResponse();
+
   try {
     const users = await prisma.user.findMany({
       orderBy: { createdAt: 'desc' },
@@ -23,6 +28,10 @@ export async function GET() {
 }
 
 export async function POST(request) {
+  const session = await getSessionUser(request);
+  if (!session) return unauthorizedResponse();
+  if (session.role?.toLowerCase() !== 'admin') return forbiddenResponse();
+
   try {
     const { name, email, password, role } = await request.json();
 
@@ -47,7 +56,7 @@ export async function POST(request) {
 
     await prisma.auditLog.create({
       data: {
-        userId: 'Admin',
+        userId: session.id,
         action: 'Create User',
         targetType: 'User',
         targetId: user.id,

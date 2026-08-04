@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '../../../lib/db';
+import { getSessionUser, unauthorizedResponse } from '../../../lib/auth';
 
 export async function GET(request) {
+  const session = await getSessionUser(request);
+  if (!session) return unauthorizedResponse();
+
   try {
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '50');

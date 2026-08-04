@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '../../../lib/db';
+import { getSessionUser, unauthorizedResponse, forbiddenResponse } from '../../../lib/auth';
 
-export async function GET() {
+export async function GET(request) {
+  const session = await getSessionUser(request);
+  if (!session) return unauthorizedResponse();
+
   try {
     const nodes = await prisma.node.findMany({
       orderBy: { createdAt: 'desc' },
@@ -30,9 +34,13 @@ export async function GET() {
 }
 
 export async function POST(request) {
+  const session = await getSessionUser(request);
+  if (!session) return unauthorizedResponse();
+  if (session.role?.toLowerCase() !== 'admin') return forbiddenResponse();
+
   try {
     const body = await request.json();
-    const { name, description, status, locationLabel, createdBy } = body;
+    const { name, description, status, locationLabel } = body;
 
     if (!name) {
       return NextResponse.json({ error: 'Node name is required' }, { status: 400 });
@@ -44,13 +52,13 @@ export async function POST(request) {
         description,
         status: status || 'proposed',
         locationLabel: locationLabel || 'Ropar District',
-        createdBy: createdBy || 'Admin',
+        createdBy: session.name,
       }
     });
 
     await prisma.auditLog.create({
       data: {
-        userId: createdBy || 'Admin',
+        userId: session.id,
         action: 'Create Node',
         targetType: 'Node',
         targetId: node.id,

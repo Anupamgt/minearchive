@@ -1,24 +1,32 @@
 import { NextResponse } from 'next/server';
+import { SESSION_COOKIE, verifySessionToken } from './lib/auth';
 
-export function proxy(request) {
+const PROTECTED_PREFIXES = ['/dashboard', '/map', '/upload', '/nodes', '/users', '/audit'];
+const ADMIN_ONLY_PREFIXES = ['/nodes', '/users'];
+
+export async function proxy(request) {
   const { pathname } = request.nextUrl;
-  const sessionCookie = request.cookies.get('minearchive_session');
 
-  if (!sessionCookie && (pathname.startsWith('/dashboard') || pathname.startsWith('/map') || pathname.startsWith('/upload') || pathname.startsWith('/nodes') || pathname.startsWith('/users') || pathname.startsWith('/audit'))) {
+  const isProtected = PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+  if (!isProtected) {
     return NextResponse.next();
   }
 
-  if (sessionCookie && (pathname.startsWith('/nodes') || pathname.startsWith('/users'))) {
-    try {
-      const decoded = JSON.parse(Buffer.from(sessionCookie.value, 'base64').toString('utf8'));
-      if (decoded.role && decoded.role.toLowerCase() !== 'admin') {
-        const url = request.nextUrl.clone();
-        url.pathname = '/dashboard';
-        return NextResponse.redirect(url);
-      }
-    } catch {
-      // Decode error pass
-    }
+  const sessionCookie = request.cookies.get(SESSION_COOKIE);
+  const session = sessionCookie ? await verifySessionToken(sessionCookie.value) : null;
+
+  if (!session) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/login';
+    url.searchParams.set('error', 'Please sign in to continue.');
+    return NextResponse.redirect(url);
+  }
+
+  const isAdminOnly = ADMIN_ONLY_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+  if (isAdminOnly && (!session.role || session.role.toLowerCase() !== 'admin')) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/dashboard';
+    return NextResponse.redirect(url);
   }
 
   return NextResponse.next();

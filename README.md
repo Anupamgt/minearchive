@@ -22,7 +22,7 @@ A web-based application for monitoring changes in mining areas through KML bound
 | Backend | Next.js API Routes |
 | Database | PostgreSQL + PostGIS |
 | File Storage | Cloud Object Storage (S3/GCS) |
-| Auth | JWT + bcrypt |
+| Auth | Google OAuth + email/password session cookie |
 
 ## Getting Started
 
@@ -30,11 +30,17 @@ A web-based application for monitoring changes in mining areas through KML bound
 # Install dependencies
 npm install
 
+# Copy env template and fill Google OAuth + DATABASE_URL
+cp .env.example .env.local
+
 # Run development server
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+Google OAuth redirect URI must be:
+`http://localhost:3000/api/auth/callback/google`
 
 ## Project Structure
 

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { readSessionFromCookie } from '../../lib/session-client';
 import './Sidebar.css';
 
 export default function Sidebar() {
@@ -10,15 +11,8 @@ export default function Sidebar() {
   const [role, setRole] = useState('Admin');
 
   useEffect(() => {
-    const cookies = document.cookie.split('; ');
-    const sessionRow = cookies.find((c) => c.startsWith('minearchive_session='));
-    if (sessionRow) {
-      try {
-        const val = sessionRow.split('=')[1];
-        const decoded = JSON.parse(Buffer.from(val, 'base64').toString('utf8'));
-        if (decoded.role) setRole(decoded.role);
-      } catch {}
-    }
+    const decoded = readSessionFromCookie();
+    if (decoded && decoded.role) setRole(decoded.role);
   }, []);
 
   const isAdmin = role.toLowerCase() === 'admin';

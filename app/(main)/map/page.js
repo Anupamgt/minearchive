@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { useToast } from '../../components/ToastProvider';
+import { readSessionFromCookie } from '../../../lib/session-client';
 import './map.css';
 
 const MapWithNoSSR = dynamic(() => import('../../components/LeafletMap'), {
@@ -27,15 +28,8 @@ export default function MapPage() {
   const [breachReason, setBreachReason] = useState('Exceeded approved perimeter boundary by 14.2 meters towards northern riverbank');
 
   useEffect(() => {
-    const cookies = document.cookie.split('; ');
-    const sessionRow = cookies.find((c) => c.startsWith('minearchive_session='));
-    if (sessionRow) {
-      try {
-        const val = sessionRow.split('=')[1];
-        const decoded = JSON.parse(Buffer.from(val, 'base64').toString('utf8'));
-        if (decoded.role) setRole(decoded.role);
-      } catch {}
-    }
+    const decoded = readSessionFromCookie();
+    if (decoded && decoded.role) setRole(decoded.role);
   }, []);
 
   const isAdmin = role.toLowerCase() === 'admin';

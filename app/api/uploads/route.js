@@ -2,8 +2,12 @@ import { NextResponse } from 'next/server';
 import { prisma } from '../../../lib/db';
 import { DOMParser } from '@xmldom/xmldom';
 import { kml } from '@tmcw/togeojson';
+import { getSessionUser, unauthorizedResponse } from '../../../lib/auth';
 
 export async function GET(request) {
+  const session = await getSessionUser(request);
+  if (!session) return unauthorizedResponse();
+
   try {
     const { searchParams } = new URL(request.url);
     const nodeId = searchParams.get('nodeId');
@@ -27,6 +31,9 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  const session = await getSessionUser(request);
+  if (!session) return unauthorizedResponse();
+
   try {
     const formData = await request.formData();
     const file = formData.get('file');
@@ -34,7 +41,7 @@ export async function POST(request) {
     const category = formData.get('category');
     const surveyDate = formData.get('surveyDate');
     const notes = formData.get('notes');
-    const uploadedBy = formData.get('uploadedBy') || 'Admin';
+    const uploadedBy = session.name;
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
@@ -74,7 +81,7 @@ export async function POST(request) {
 
     await prisma.auditLog.create({
       data: {
-        userId: uploadedBy,
+        userId: session.id,
         action: 'Upload KML',
         targetType: 'Upload',
         targetId: upload.id,
