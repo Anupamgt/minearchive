@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:supabase": "node scripts/setup-supabase.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.4.0",

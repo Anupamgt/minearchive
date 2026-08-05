@@ -20,7 +20,7 @@ A web-based application for monitoring changes in mining areas through KML bound
 | Frontend | Next.js (App Router) + Vanilla CSS |
 | Map | ArcGIS JavaScript SDK / Leaflet.js |
 | Backend | Next.js API Routes |
-| Database | PostgreSQL + PostGIS |
+| Database | PostgreSQL + PostGIS (local Docker or **Supabase**) |
 | File Storage | Cloud Object Storage (S3/GCS) |
 | Auth | Google OAuth + email/password session cookie |
 
@@ -41,6 +41,23 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 Google OAuth redirect URI must be:
 `http://localhost:3000/api/auth/callback/google`
+
+## Supabase (production database)
+
+1. Create a free project at [supabase.com/dashboard](https://supabase.com/dashboard).
+2. **Project Settings → Database → Connect** and copy:
+   - **Transaction pooler** (port `6543`) → `DATABASE_URL` (append `?pgbouncer=true&connection_limit=1`)
+   - **Direct connection** (port `5432`) → `DIRECT_URL`
+3. Optional: **Project Settings → API** → set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
+4. Put the values in `.env.local`, then:
+
+```bash
+npm run db:supabase
+```
+
+That enables PostGIS, pushes the Prisma schema, and creates a GIST index on `UploadGeometry.geom`.
+
+Smoke test: `GET /api/health?deep=1` should return `"database":"ok"`.
 
 ## Project Structure
 

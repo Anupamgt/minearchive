@@ -63,9 +63,9 @@ These aren't style nits — right now, in the current codebase, **auth is not ac
 - [ ] Decide: keep or kill the `admin123`/`user123` password bypass for prod
 
 ### Phase 2 — Provision free infra (~30–45 min)
-- [ ] Create a free Supabase project → SQL editor → `create extension postgis;`
-- [ ] Copy the pooled connection string as prod `DATABASE_URL`
-- [ ] Run `npx prisma db push` against Supabase from your machine to create tables
+- [x] Repo wiring for Supabase (Prisma `DIRECT_URL`, `npm run db:supabase`, PostGIS SQL)
+- [ ] Create a free Supabase project → copy pooler + direct connection strings into `.env.local`
+- [ ] Run `npm run db:supabase` (enables PostGIS, pushes schema, GIST index)
 - [ ] Create/confirm a free Vercel account, import the GitHub repo
 
 ### Phase 3 — Google OAuth for the prod domain (~15–20 min)
