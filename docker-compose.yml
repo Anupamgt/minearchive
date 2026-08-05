@@ -12,6 +12,30 @@ services:
       - db
     restart: always
 
+  # Production-like app with Node inspector exposed for remote attach.
+  # Usage: docker compose --profile debug up --build app-debug
+  # Then: Cursor/VS Code → "Next.js: attach to production (9229)"
+  app-debug:
+    profiles: ["debug"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        ENABLE_SOURCE_MAPS: "true"
+    ports:
+      - "3000:3000"
+      - "9229:9229"
+    environment:
+      DATABASE_URL: "postgresql://minearchive_user:minearchive_pass@db:5432/minearchive_db?schema=public"
+      NODE_ENV: production
+      MINEARCHIVE_DEBUG: "true"
+      DEBUG: "minearchive:*"
+      ENABLE_SOURCE_MAPS: "true"
+      NODE_OPTIONS: "--inspect=0.0.0.0:9229"
+    depends_on:
+      - db
+    restart: "no"
+
   db:
     image: postgis/postgis:15-3.3
     environment:

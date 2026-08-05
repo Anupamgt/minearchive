@@ -4,8 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:debug": "next dev --inspect",
     "build": "next build",
+    "build:debug": "ENABLE_SOURCE_MAPS=true next build",
     "start": "next start",
+    "start:debug": "bash scripts/start-debug.sh",
+    "debug:prod": "npm run build:debug && npm run start:debug",
     "lint": "eslint"
   },
   "dependencies": {

@@ -15,6 +15,9 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED 1
 ENV NODE_ENV production
+# Pass ENABLE_SOURCE_MAPS=true for debug images (see docker compose profile "debug")
+ARG ENABLE_SOURCE_MAPS=false
+ENV ENABLE_SOURCE_MAPS=$ENABLE_SOURCE_MAPS
 RUN npx prisma generate
 RUN npm run build
 
@@ -36,5 +39,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 
 USER nextjs
 EXPOSE 3000
+# 9229 is only used when NODE_OPTIONS includes --inspect (debug compose profile)
+EXPOSE 9229
 
 CMD ["node", "server.js"]
