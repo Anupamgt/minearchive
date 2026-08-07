@@ -55,6 +55,6 @@ Click **Deploy**. Every push to the Production branch (usually `main`) auto-depl
 ## Caching behavior on Vercel
 
 - **CDN:** static assets long-cached (`vercel.json` headers)
-- **Data Cache:** nodes / uploads / users / audit lists cached ~60s via `unstable_cache` + tags
+- **Data Cache:** nodes / uploads / users / audit lists cached ~240s via `unstable_cache` + tags
 - **Mutations** (create node/user, upload KML) call `revalidateTag(..., 'max')` so lists refresh on next read
 - **Auth APIs / health:** `Cache-Control: no-store` (never public CDN)

@@ -71,7 +71,7 @@ Short version:
 
 ### Caching
 - Static assets: long CDN cache (`vercel.json`)
-- List APIs (nodes/uploads/users/audit): ~60s Data Cache with tag invalidation on writes
+- List APIs (nodes/uploads/users/audit): ~240s Data Cache with tag invalidation on writes
 - Auth + `/api/health`: never CDN-cached
 
 ## Project Structure
