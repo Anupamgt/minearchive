@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
 import { prisma } from '../../../lib/db';
+import { noStoreJson } from '../../../lib/cache-headers';
 
 /**
  * Liveness / DB probe for Supabase + local deploys.
@@ -37,5 +37,5 @@ export async function GET(request) {
   }
 
   payload.latencyMs = Date.now() - started;
-  return NextResponse.json(payload, { status: payload.status === 'ok' ? 200 : 503 });
+  return noStoreJson(payload, { status: payload.status === 'ok' ? 200 : 503 });
 }

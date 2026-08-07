@@ -59,6 +59,21 @@ That enables PostGIS, pushes the Prisma schema, and creates a GIST index on `Upl
 
 Smoke test: `GET /api/health?deep=1` should return `"database":"ok"`.
 
+## Deploy to Vercel (dashboard only — no CLI)
+
+See **[docs/vercel-dashboard-deploy.md](docs/vercel-dashboard-deploy.md)**.
+
+Short version:
+1. Push this repo to GitHub
+2. [vercel.com/new](https://vercel.com/new) → Import `minearchive`
+3. Add env vars (`DATABASE_URL`, `DIRECT_URL`, `SESSION_SECRET`, Google OAuth, …)
+4. Deploy → add the `*.vercel.app` origin/redirect in Google Cloud → Redeploy
+
+### Caching
+- Static assets: long CDN cache (`vercel.json`)
+- List APIs (nodes/uploads/users/audit): ~60s Data Cache with tag invalidation on writes
+- Auth + `/api/health`: never CDN-cached
+
 ## Project Structure
 
 ```
