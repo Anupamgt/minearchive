@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server';
 import { prisma } from '../../../lib/db';
 import { getSessionUser, unauthorizedResponse, forbiddenResponse } from '../../../lib/auth';
+import { getCachedUsers, CACHE_TAGS } from '../../../lib/cached-queries';
+import { privateJson, bustTags } from '../../../lib/cache-headers';
 
 export async function GET(request) {
   const session = await getSessionUser(request);
@@ -8,22 +9,11 @@ export async function GET(request) {
   if (session.role?.toLowerCase() !== 'admin') return forbiddenResponse();
 
   try {
-    const users = await prisma.user.findMany({
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        status: true,
-        lastLogin: true,
-        createdAt: true,
-      }
-    });
-    return NextResponse.json(users);
+    const users = await getCachedUsers();
+    return privateJson(users);
   } catch (error) {
     console.error('GET /api/users error:', error);
-    return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
+    return privateJson({ error: 'Failed to fetch users' }, { status: 500 });
   }
 }
 
@@ -36,12 +26,12 @@ export async function POST(request) {
     const { name, email, password, role } = await request.json();
 
     if (!name || !email || !password) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+      return privateJson({ error: 'Missing required fields' }, { status: 400 });
     }
 
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
-      return NextResponse.json({ error: 'Email already exists' }, { status: 409 });
+      return privateJson({ error: 'Email already exists' }, { status: 409 });
     }
 
     const user = await prisma.user.create({
@@ -51,7 +41,7 @@ export async function POST(request) {
         passwordHash: password, // MVP demo
         role: role || 'user',
         status: 'active',
-      }
+      },
     });
 
     await prisma.auditLog.create({
@@ -61,18 +51,23 @@ export async function POST(request) {
         targetType: 'User',
         targetId: user.id,
         details: `Created user ${user.email} (${user.role})`,
-      }
+      },
     });
 
-    return NextResponse.json({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      status: user.status,
-    }, { status: 201 });
+    bustTags(CACHE_TAGS.users, CACHE_TAGS.audit);
+
+    return privateJson(
+      {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+      },
+      { status: 201 }
+    );
   } catch (error) {
     console.error('POST /api/users error:', error);
-    return NextResponse.json({ error: 'Failed to create user' }, { status: 500 });
+    return privateJson({ error: 'Failed to create user' }, { status: 500 });
   }
 }

@@ -15,6 +15,9 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED 1
 ENV NODE_ENV production
+# Prisma schema references DATABASE_URL + DIRECT_URL; generate does not connect.
+ENV DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres"
+ENV DIRECT_URL="postgresql://postgres:postgres@localhost:5432/postgres"
 RUN npx prisma generate
 RUN npm run build
 
