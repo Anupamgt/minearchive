@@ -1,5 +1,6 @@
 import './globals.css';
 import { ToastProvider } from './components/ToastProvider';
+import { Analytics } from '@vercel/analytics/next';
 
 export const metadata = {
   title: 'MineArchive — Mining Area Directory & Spatial Archive',
@@ -19,6 +20,7 @@ export default function RootLayout({ children }) {
         <ToastProvider>
           {children}
         </ToastProvider>
+        <Analytics />
       </body>
     </html>
   );
