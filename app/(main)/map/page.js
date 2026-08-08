@@ -358,18 +358,9 @@ export default function MapPage() {
               {isAdmin && (
                 <button
                   type="button"
+                  className="btn btn-danger"
                   onClick={() => setBreachModal(true)}
-                  style={{
-                    width: '100%',
-                    marginTop: 12,
-                    background: 'var(--red)',
-                    color: '#fff',
-                    border: 'none',
-                    padding: '10px 14px',
-                    fontSize: 12,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                  }}
+                  style={{ width: '100%', marginTop: 12 }}
                 >
                   Flag Encroachment Breach
                 </button>
@@ -385,7 +376,7 @@ export default function MapPage() {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0,0,0,0.7)',
+            background: 'rgba(9,30,66,0.54)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -394,7 +385,14 @@ export default function MapPage() {
         >
           <div
             className="modal-card"
-            style={{ background: 'var(--surface)', border: '1px solid var(--red)', padding: 24, width: 440 }}
+            style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-lg)',
+              boxShadow: 'var(--shadow-overlay)',
+              padding: 24,
+              width: 440,
+            }}
           >
             <h3 style={{ marginTop: 0, marginBottom: 12, color: 'var(--red)' }}>
               Flag Encroachment Violation
@@ -412,9 +410,9 @@ export default function MapPage() {
                   rows="3"
                   style={{
                     width: '100%',
-                    background: 'var(--bg)',
+                    background: 'var(--surface)',
                     border: '1px solid var(--border)',
-                    color: '#fff',
+                    color: 'var(--text)',
                     padding: 8,
                   }}
                   value={breachReason}
@@ -426,11 +424,7 @@ export default function MapPage() {
                 <button type="button" className="btn btn-outline" onClick={() => setBreachModal(false)}>
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="btn"
-                  style={{ background: 'var(--red)', color: '#fff', fontWeight: 700, padding: '8px 16px' }}
-                >
+                <button type="submit" className="btn btn-danger">
                   Confirm Breach Notice
                 </button>
               </div>
