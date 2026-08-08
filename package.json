@@ -11,7 +11,8 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:supabase": "node scripts/setup-supabase.mjs",
-    "db:seed-demo": "node scripts/seed-demo-users.mjs"
+    "db:seed-demo": "node scripts/seed-demo-users.mjs",
+    "db:seed-nodes": "node scripts/seed-mining-nodes.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.4.0",
