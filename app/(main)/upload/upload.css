@@ -1,61 +1,48 @@
 .upload-container {
-  max-width: 640px;
+  max-width: 720px;
   margin: 0 auto;
 }
 
-.upload-title {
-  font-size: 11px;
+.page-subtitle {
+  font-size: 13px;
   color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-weight: 600;
+  margin-top: 2px;
+  max-width: 640px;
+}
+
+.upload-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
   margin-bottom: 16px;
 }
 
-.upload-section {
-  margin-bottom: 16px;
-}
-
-.upload-row {
-  display: flex;
-  gap: 12px;
-}
-
-.upload-row > * {
-  flex: 1;
-}
-
-.upload-file-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  background: var(--surface2);
+.upload-file-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+  font-size: 13px;
   border: 1px solid var(--border);
-  margin-top: 8px;
-  font-size: 12px;
+  border-radius: var(--radius);
+  overflow: hidden;
 }
 
-.upload-file-info .file-name {
-  flex: 1;
-  color: var(--accent2);
+.upload-file-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  background: var(--surface);
 }
 
-.upload-file-info .remove-btn {
-  background: none;
-  border: none;
+.upload-file-list li:last-child {
+  border-bottom: none;
+}
+
+.upload-file-list .file-size {
   color: var(--muted);
-  cursor: pointer;
-  font-size: 14px;
-  padding: 0 4px;
-}
-
-.upload-file-info .remove-btn:hover {
-  color: var(--red);
-}
-
-.detected-areas {
-  margin-top: 16px;
 }
 
 .detected-title {
@@ -63,15 +50,26 @@
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  font-weight: 600;
+  font-weight: 700;
   margin-bottom: 8px;
+}
+
+.detected-empty {
+  font-size: 13px;
+  color: var(--muted);
 }
 
 .upload-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  margin-top: 20px;
+  gap: 12px;
+  margin-top: 24px;
   padding-top: 16px;
   border-top: 1px solid var(--border);
+}
+
+@media (max-width: 560px) {
+  .upload-grid {
+    grid-template-columns: 1fr;
+  }
 }

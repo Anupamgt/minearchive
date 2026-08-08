@@ -8,6 +8,7 @@ export default function NodesPage() {
   const { showToast } = useToast();
   const [nodes, setNodes] = useState([]);
   const [showModal, setShowModal] = useState(false);
+  const [query, setQuery] = useState('');
   const [formData, setFormData] = useState({ name: '', status: 'active', locationLabel: 'Ropar District' });
 
   const fetchNodes = () => {
@@ -70,85 +71,125 @@ export default function NodesPage() {
       });
   };
 
+  const q = query.trim().toLowerCase();
+  const filteredNodes =
+    q === ''
+      ? nodes
+      : nodes.filter((n) =>
+          [n.name, n.status, n.locationLabel, n.description]
+            .filter(Boolean)
+            .some((v) => String(v).toLowerCase().includes(q))
+        );
+
+  const statusTagClass = (status) => {
+    const s = (status || '').toLowerCase();
+    if (s === 'active') return 'tag tag-green';
+    if (s === 'proposed' || s === 'pending') return 'tag tag-yellow';
+    return 'tag';
+  };
+
   return (
     <div className="nodes-container">
-      <div className="nodes-header">
-        <div className="nodes-title">NODE MANAGEMENT (MINING ENCLOSURES)</div>
-        <button className="btn btn-primary" onClick={() => setShowModal(true)}>+ Create Node</button>
+      <div className="page-header">
+        <div>
+          <h1>Node Management</h1>
+          <p className="page-subtitle">Mining enclosures across Ropar District</p>
+        </div>
+        <div className="header-actions">
+          <input
+            type="search"
+            className="input"
+            placeholder="Search nodes…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <button className="btn btn-primary" onClick={() => setShowModal(true)}>+ Create Node</button>
+        </div>
       </div>
 
-      <table className="table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Status</th>
-            <th>Uploads</th>
-            <th>Last Updated</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {nodes.map((n) => (
-            <tr key={n.id}>
-              <td style={{ fontWeight: 600 }}>{n.name}</td>
-              <td>
-                <span className={`tag ${n.status === 'active' ? 'tag-green' : n.status === 'proposed' ? 'tag-yellow' : ''}`}>
-                  {n.status.toUpperCase()}
-                </span>
-              </td>
-              <td>{n.uploadCount || n.uploads || 0}</td>
-              <td style={{ color: 'var(--muted)' }}>{typeof n.updatedAt === 'string' ? n.updatedAt.split('T')[0] : 'Jun 15, 2026'}</td>
-              <td>
-                <button
-                  className="btn btn-outline"
-                  style={{ padding: '2px 8px', fontSize: 11, marginRight: 6 }}
-                  onClick={() => showToast(`Editing parameters for ${n.name}`, 'info')}
-                >
-                  Edit
-                </button>
-                <button
-                  className="btn btn-outline"
-                  style={{ padding: '2px 8px', fontSize: 11 }}
-                  onClick={() => showToast(`Archived enclosure node #${n.id}`, 'warning')}
-                >
-                  Archive
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="card table-card">
+        {filteredNodes.length === 0 ? (
+          <div className="empty-state">
+            <p>No nodes match your search.</p>
+          </div>
+        ) : (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Uploads</th>
+                <th>Last Updated</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredNodes.map((n) => (
+                <tr key={n.id}>
+                  <td style={{ fontWeight: 600 }}>{n.name}</td>
+                  <td>
+                    <span className={statusTagClass(n.status)}>
+                      {(n.status || '').toUpperCase()}
+                    </span>
+                  </td>
+                  <td>{n.uploadCount || n.uploads || 0}</td>
+                  <td style={{ color: 'var(--muted)' }}>{typeof n.updatedAt === 'string' ? n.updatedAt.split('T')[0] : 'Jun 15, 2026'}</td>
+                  <td>
+                    <div className="table-actions">
+                      <button
+                        className="btn btn-outline btn-sm"
+                        onClick={() => showToast(`Editing parameters for ${n.name}`, 'info')}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="btn btn-danger btn-sm"
+                        onClick={() => showToast(`Archived enclosure node #${n.id}`, 'warning')}
+                      >
+                        Archive
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
 
       {showModal && (
         <div className="modal-overlay">
-          <div className="modal-card" style={{ background: 'var(--surface)', border: '1px solid var(--border)', padding: 20, width: 400 }}>
-            <h3 style={{ marginTop: 0, marginBottom: 16 }}>Create Mining Node Enclosure</h3>
+          <div className="modal">
+            <div className="modal-header">
+              <h3>Create Mining Node Enclosure</h3>
+              <button type="button" className="modal-close" aria-label="Close" onClick={() => setShowModal(false)}>×</button>
+            </div>
             <form onSubmit={handleCreate}>
-              <div style={{ marginBottom: 12 }}>
-                <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>Enclosure Name</label>
-                <input
-                  type="text"
-                  className="input"
-                  style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: '#fff', padding: 8 }}
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g. Nangal Quarry Sector 4"
-                />
+              <div className="modal-body">
+                <div className="form-group">
+                  <label>Enclosure Name</label>
+                  <input
+                    type="text"
+                    className="input"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="e.g. Nangal Quarry Sector 4"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Initial Status</label>
+                  <select
+                    className="input"
+                    value={formData.status}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                  >
+                    <option value="active">Active</option>
+                    <option value="proposed">Proposed</option>
+                    <option value="archived">Archived</option>
+                  </select>
+                </div>
               </div>
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>Initial Status</label>
-                <select
-                  className="input"
-                  style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: '#fff', padding: 8 }}
-                  value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                >
-                  <option value="active">Active</option>
-                  <option value="proposed">Proposed</option>
-                  <option value="archived">Archived</option>
-                </select>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <div className="modal-footer">
                 <button type="button" className="btn btn-outline" onClick={() => setShowModal(false)}>Cancel</button>
                 <button type="submit" className="btn btn-primary">Save Node</button>
               </div>

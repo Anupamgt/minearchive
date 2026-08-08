@@ -39,7 +39,13 @@ export default function AuditPage() {
   }, []);
 
   const filteredLogs = logs.filter((l) => {
-    const matchSearch = searchTerm === '' || l.details?.toLowerCase().includes(searchTerm.toLowerCase()) || l.userName?.toLowerCase().includes(searchTerm.toLowerCase());
+    const q = searchTerm.toLowerCase();
+    const matchSearch =
+      searchTerm === '' ||
+      l.details?.toLowerCase().includes(q) ||
+      l.userName?.toLowerCase().includes(q) ||
+      l.action?.toLowerCase().includes(q) ||
+      l.targetType?.toLowerCase().includes(q);
     const matchAction = filterAction === 'All Actions' || l.action?.toLowerCase() === filterAction.toLowerCase();
     const matchUser = filterUser === 'All Users' || l.userName?.toLowerCase() === filterUser.toLowerCase();
     return matchSearch && matchAction && matchUser;
@@ -80,70 +86,79 @@ export default function AuditPage() {
 
   return (
     <div className="audit-container">
-      <div className="audit-title">CENTRAL SYSTEM AUDIT TRAIL</div>
-
-      {/* Filters */}
-      <div className="audit-filters">
-        <select className="input" value={filterAction} onChange={(e) => setFilterAction(e.target.value)}>
-          <option>All Actions</option>
-          <option value="Upload KML">Upload KML</option>
-          <option value="Archive Node">Archive Node</option>
-          <option value="Login">Login</option>
-        </select>
-        <select className="input" value={filterUser} onChange={(e) => setFilterUser(e.target.value)}>
-          <option>All Users</option>
-          <option value="Harpreet Singh">Harpreet Singh</option>
-          <option value="Amit Sharma">Amit Sharma</option>
-          <option value="Admin">Admin</option>
-        </select>
-        <input
-          type="text"
-          className="input"
-          placeholder="Search activity details..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          <button className="btn btn-outline" onClick={handlePrintPDF}>Export PDF</button>
-          <button className="btn btn-outline" onClick={handleExportCSV}>Export CSV</button>
+      <div className="page-header">
+        <div>
+          <h1>Central System Audit Trail</h1>
+          <p className="page-subtitle">Immutable record of all archive activity</p>
+        </div>
+        <div className="header-actions">
+          <input
+            type="search"
+            className="input"
+            placeholder="Search audit log…"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
       </div>
 
-      {filteredLogs.length === 0 ? (
-        <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)', background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          <div style={{ fontSize: 24, marginBottom: 8 }}>📋</div>
-          <div>No audit activity matches your current filter criteria.</div>
+      <div className="card table-card">
+        <div className="audit-toolbar">
+          <div className="audit-filters">
+            <select className="input" value={filterAction} onChange={(e) => setFilterAction(e.target.value)}>
+              <option>All Actions</option>
+              <option value="Upload KML">Upload KML</option>
+              <option value="Archive Node">Archive Node</option>
+              <option value="Login">Login</option>
+            </select>
+            <select className="input" value={filterUser} onChange={(e) => setFilterUser(e.target.value)}>
+              <option>All Users</option>
+              <option value="Harpreet Singh">Harpreet Singh</option>
+              <option value="Amit Sharma">Amit Sharma</option>
+              <option value="Admin">Admin</option>
+            </select>
+          </div>
+          <div className="audit-exports">
+            <button className="btn btn-outline" onClick={handlePrintPDF}>Export PDF</button>
+            <button className="btn btn-outline" onClick={handleExportCSV}>Export CSV</button>
+          </div>
         </div>
-      ) : (
-        <table className="table" style={{ fontSize: 12 }}>
-          <thead>
-            <tr>
-              <th>Timestamp</th>
-              <th>User Persona</th>
-              <th>Action Event</th>
-              <th>Target Enclosure</th>
-              <th>Details / Findings</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredLogs.map((l) => (
-              <tr key={l.id}>
-                <td style={{ color: 'var(--muted)', whiteSpace: 'nowrap' }}>
-                  {typeof l.timestamp === 'string' ? l.timestamp.replace('T', ' ').substring(0, 16) : '2026-06-15 14:32'}
-                </td>
-                <td style={{ fontWeight: 600, color: l.userName === 'Admin' ? 'var(--accent)' : '#fff' }}>
-                  {l.userName}
-                </td>
-                <td>
-                  <span className="tag" style={{ background: 'var(--surface2)' }}>{l.action}</span>
-                </td>
-                <td style={{ color: 'var(--accent2)' }}>{l.targetType || l.targetId || '—'}</td>
-                <td>{l.details}</td>
+
+        {filteredLogs.length === 0 ? (
+          <div className="empty-state">
+            <p>No audit activity matches your current filter criteria.</p>
+          </div>
+        ) : (
+          <table className="table audit-table" style={{ fontSize: 12 }}>
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>User Persona</th>
+                <th>Action Event</th>
+                <th>Target Enclosure</th>
+                <th>Details / Findings</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+            </thead>
+            <tbody>
+              {filteredLogs.map((l) => (
+                <tr key={l.id}>
+                  <td style={{ color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+                    {typeof l.timestamp === 'string' ? l.timestamp.replace('T', ' ').substring(0, 16) : '2026-06-15 14:32'}
+                  </td>
+                  <td style={{ fontWeight: 600, color: l.userName === 'Admin' ? 'var(--accent)' : 'var(--text)' }}>
+                    {l.userName}
+                  </td>
+                  <td>
+                    <span className="tag tag-accent">{l.action}</span>
+                  </td>
+                  <td style={{ color: 'var(--accent2)' }}>{l.targetType || l.targetId || '—'}</td>
+                  <td>{l.details}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   );
 }

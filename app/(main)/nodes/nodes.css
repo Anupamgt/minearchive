@@ -1,57 +1,40 @@
-.nodes-title {
-  font-size: 11px;
+.page-subtitle {
+  font-size: 13px;
   color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-weight: 600;
+  margin-top: 2px;
 }
 
-.nodes-table-wrapper {
-  border: 1px solid var(--border);
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-.approve-btn {
-  background: none;
-  border: 1px solid var(--green);
-  color: var(--green);
-  padding: 3px 8px;
-  font-size: 11px;
-  cursor: pointer;
-  margin-right: 4px;
+.header-actions input[type="search"] {
+  width: 240px;
 }
 
-.approve-btn:hover {
-  background: var(--green);
-  color: #fff;
+/* Table sits flush inside a rounded card */
+.table-card {
+  overflow: hidden;
 }
 
-.reject-btn {
-  background: none;
-  border: 1px solid var(--red);
-  color: var(--red);
-  padding: 3px 8px;
-  font-size: 11px;
-  cursor: pointer;
+.table-card .table th {
+  background: var(--surface2);
+  padding-left: 14px;
+  padding-right: 14px;
 }
 
-.reject-btn:hover {
-  background: var(--red);
-  color: #fff;
+.table-card .table td {
+  padding-left: 14px;
+  padding-right: 14px;
 }
 
-.action-link {
-  color: var(--accent);
-  cursor: pointer;
-  font-size: 12px;
-  background: none;
-  border: none;
-  padding: 0;
+.table-card .table tbody tr:last-child td {
+  border-bottom: none;
 }
 
-.action-link:hover {
-  text-decoration: underline;
-}
-
-.action-link + .action-link {
-  margin-left: 10px;
+.table-actions {
+  display: flex;
+  gap: 6px;
 }

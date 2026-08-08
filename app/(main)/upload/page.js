@@ -148,204 +148,159 @@ export default function UploadPage() {
     }
   };
 
+  const statusTagClass = (status) => (status === 'Ready' ? 'tag tag-green' : 'tag tag-yellow');
+
   return (
     <div className="upload-container">
-      <div className="upload-title">UPLOAD KML DATA & SPATIAL BOUNDARIES</div>
-      <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: -8, marginBottom: 20, maxWidth: 640 }}>
-        Select multiple KML files to attach to one mining node. Each file becomes its own archive entry and can be toggled on the map.
-      </p>
-
-      <form onSubmit={handleSubmit} style={{ maxWidth: 640 }}>
-        <div
-          className={`drop-zone${isDragging ? ' drag-over' : ''}`}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setIsDragging(true);
-          }}
-          onDragLeave={() => setIsDragging(false)}
-          onDrop={handleDrop}
-          onClick={() => document.getElementById('kml-input').click()}
-          style={{
-            cursor: 'pointer',
-            textAlign: 'center',
-            padding: 32,
-            background: 'var(--surface)',
-            border: `2px dashed ${isDragging ? 'var(--accent)' : 'var(--border)'}`,
-            marginBottom: 12,
-          }}
-        >
-          <input
-            id="kml-input"
-            type="file"
-            accept=".kml,.xml"
-            multiple
-            style={{ display: 'none' }}
-            onChange={handleFileChange}
-          />
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>
-            {files.length > 0
-              ? `${files.length} file(s) queued — click to add more`
-              : 'Drop .kml files here or click to browse'}
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-            Multi-select supported · Google Earth KML polygons / MultiPolygons
-          </div>
+      <div className="page-header">
+        <div>
+          <h1>Upload KML Data &amp; Spatial Boundaries</h1>
+          <p className="page-subtitle">
+            Select multiple KML files to attach to one mining node. Each file becomes its own archive entry and can be toggled on the map.
+          </p>
         </div>
+      </div>
 
-        {files.length > 0 && (
-          <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 20px', fontSize: 12 }}>
-            {files.map((f, i) => (
-              <li
-                key={`${f.name}-${i}`}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '6px 0',
-                  borderBottom: '1px solid var(--border)',
-                  color: 'var(--text)',
-                }}
-              >
-                <span>
-                  {f.name}{' '}
-                  <span style={{ color: 'var(--muted)' }}>({(f.size / 1024).toFixed(1)} KB)</span>
-                </span>
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  style={{ padding: '2px 8px', fontSize: 10 }}
-                  onClick={() => removeFile(i)}
-                >
-                  Remove
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-          <div>
-            <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>
-              Target Mining Enclosure (Node)
-            </label>
-            <select
-              className="input"
-              style={{
-                width: '100%',
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                color: '#fff',
-                padding: 8,
+      <form onSubmit={handleSubmit}>
+        <div className="card">
+          <div className="card-body">
+            <div
+              className={`drop-zone${isDragging ? ' active' : ''}`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
               }}
-              value={nodeId}
-              onChange={(e) => setNodeId(e.target.value)}
-              required
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={handleDrop}
+              onClick={() => document.getElementById('kml-input').click()}
+              style={{ marginBottom: 16 }}
             >
-              {nodes.length === 0 ? (
-                <option value="">No nodes — create one first</option>
-              ) : (
-                nodes.map((n) => (
-                  <option key={n.id} value={n.id}>
-                    {n.name}
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>
-              Survey Date
-            </label>
-            <input
-              type="date"
-              className="input"
-              style={{
-                width: '100%',
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                color: '#fff',
-                padding: 8,
-              }}
-              value={surveyDate}
-              onChange={(e) => setSurveyDate(e.target.value)}
-            />
-          </div>
-        </div>
+              <input
+                id="kml-input"
+                type="file"
+                accept=".kml,.xml"
+                multiple
+                style={{ display: 'none' }}
+                onChange={handleFileChange}
+              />
+              <div className="drop-zone-label">
+                {files.length > 0
+                  ? `${files.length} file(s) queued — click to add more`
+                  : 'Drop .kml files here or click to browse'}
+              </div>
+              <div className="drop-zone-hint">
+                Multi-select supported · Google Earth KML polygons / MultiPolygons
+              </div>
+            </div>
 
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>
-            Upload Category
-          </label>
-          <select
-            className="input"
-            style={{
-              width: '100%',
-              background: 'var(--surface)',
-              border: '1px solid var(--border)',
-              color: '#fff',
-              padding: 8,
-            }}
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-          >
-            <option value="Routine Survey">Routine Survey (Scheduled Monitoring)</option>
-            <option value="Encroachment Report">Encroachment Report (Boundary Breach)</option>
-            <option value="Restoration Check">Restoration Check (Post-Mining Audit)</option>
-          </select>
-        </div>
-
-        <div style={{ marginBottom: 24 }}>
-          <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>
-            Notes / Findings
-          </label>
-          <textarea
-            className="input"
-            rows="3"
-            style={{
-              width: '100%',
-              background: 'var(--surface)',
-              border: '1px solid var(--border)',
-              color: '#fff',
-              padding: 8,
-              fontFamily: 'inherit',
-            }}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Document any spatial deviations or contractor activity..."
-          />
-        </div>
-
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', marginBottom: 8 }}>
-            DETECTED KML POLYGON BOUNDARIES
-          </div>
-          {detectedAreas.length === 0 ? (
-            <div style={{ fontSize: 12, color: 'var(--muted)' }}>Add KML files to preview placemarks.</div>
-          ) : (
-            <table className="table" style={{ fontSize: 12 }}>
-              <thead>
-                <tr>
-                  <th>Polygon Feature</th>
-                  <th>Status</th>
-                  <th>Target Node</th>
-                </tr>
-              </thead>
-              <tbody>
-                {detectedAreas.map((item, idx) => (
-                  <tr key={idx}>
-                    <td>{item.polygon}</td>
-                    <td style={{ color: item.status === 'Ready' ? 'var(--green)' : 'var(--yellow)' }}>
-                      {item.status}
-                    </td>
-                    <td>{item.node}</td>
-                  </tr>
+            {files.length > 0 && (
+              <ul className="upload-file-list">
+                {files.map((f, i) => (
+                  <li key={`${f.name}-${i}`}>
+                    <span>
+                      {f.name}{' '}
+                      <span className="file-size">({(f.size / 1024).toFixed(1)} KB)</span>
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      onClick={() => removeFile(i)}
+                    >
+                      Remove
+                    </button>
+                  </li>
                 ))}
-              </tbody>
-            </table>
+              </ul>
+            )}
+
+            <div className="upload-grid">
+              <div className="form-group">
+                <label>Target Mining Enclosure (Node)</label>
+                <select
+                  className="input"
+                  value={nodeId}
+                  onChange={(e) => setNodeId(e.target.value)}
+                  required
+                >
+                  {nodes.length === 0 ? (
+                    <option value="">No nodes — create one first</option>
+                  ) : (
+                    nodes.map((n) => (
+                      <option key={n.id} value={n.id}>
+                        {n.name}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Survey Date</label>
+                <input
+                  type="date"
+                  className="input"
+                  value={surveyDate}
+                  onChange={(e) => setSurveyDate(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>Upload Category</label>
+              <select
+                className="input"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+              >
+                <option value="Routine Survey">Routine Survey (Scheduled Monitoring)</option>
+                <option value="Encroachment Report">Encroachment Report (Boundary Breach)</option>
+                <option value="Restoration Check">Restoration Check (Post-Mining Audit)</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>Notes / Findings</label>
+              <textarea
+                className="input"
+                rows="3"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Document any spatial deviations or contractor activity..."
+              />
+            </div>
+          </div>
+        </div>
+
+        <div style={{ marginTop: 16 }}>
+          <div className="detected-title">Detected KML Polygon Boundaries</div>
+          {detectedAreas.length === 0 ? (
+            <div className="detected-empty">Add KML files to preview placemarks.</div>
+          ) : (
+            <div className="card table-card" style={{ overflow: 'hidden' }}>
+              <table className="table" style={{ fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    <th>Polygon Feature</th>
+                    <th>Status</th>
+                    <th>Target Node</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detectedAreas.map((item, idx) => (
+                    <tr key={idx}>
+                      <td>{item.polygon}</td>
+                      <td>
+                        <span className={statusTagClass(item.status)}>{item.status}</span>
+                      </td>
+                      <td>{item.node}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+        <div className="upload-actions">
           <button type="button" className="btn btn-outline" onClick={() => router.push('/map')}>
             Cancel
           </button>
