@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
-import { OAUTH_STATE_COOKIE } from '../../../../lib/auth';
+import { OAUTH_STATE_COOKIE, resolveGoogleRedirectUri } from '../../../../lib/auth';
 
-export async function GET() {
+export async function GET(request) {
   const clientId = process.env.GOOGLE_CLIENT_ID;
-  const redirectUri =
-    process.env.GOOGLE_REDIRECT_URI ||
-    `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/auth/callback/google`;
+  const redirectUri = resolveGoogleRedirectUri(request);
 
   if (!clientId) {
     return NextResponse.json(
@@ -38,6 +36,7 @@ export async function GET() {
     path: '/',
     maxAge: 60 * 10,
     sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
   });
 
   return response;
