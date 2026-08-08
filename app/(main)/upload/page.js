@@ -1,136 +1,271 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '../../components/ToastProvider';
 import './upload.css';
 
+function previewPolygonsFromKmlText(text) {
+  try {
+    const doc = new DOMParser().parseFromString(text, 'text/xml');
+    const placemarks = Array.from(doc.getElementsByTagName('Placemark'));
+    return placemarks.map((pm, idx) => {
+      const name =
+        pm.getElementsByTagName('name')[0]?.textContent?.trim() || `Polygon ${idx + 1}`;
+      const hasPolygon = pm.getElementsByTagName('Polygon').length > 0;
+      return { polygon: name, status: hasPolygon ? 'Ready' : 'Skipped', node: '—' };
+    });
+  } catch {
+    return [];
+  }
+}
+
 export default function UploadPage() {
   const router = useRouter();
   const { showToast } = useToast();
-  const [file, setFile] = useState(null);
-  const [nodeId, setNodeId] = useState('1');
-  const [surveyDate, setSurveyDate] = useState('2026-06-26');
+  const [files, setFiles] = useState([]);
+  const [nodes, setNodes] = useState([]);
+  const [nodeId, setNodeId] = useState('');
+  const [surveyDate, setSurveyDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [category, setCategory] = useState('Routine Survey');
   const [notes, setNotes] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [detectedAreas, setDetectedAreas] = useState([
-    { polygon: 'Ropar North Quarry Sector 1', status: 'Matched', node: 'Ropar North Quarry' },
-  ]);
+  const [detectedAreas, setDetectedAreas] = useState([]);
+
+  useEffect(() => {
+    fetch('/api/nodes', { credentials: 'same-origin' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setNodes(data);
+          setNodeId(data[0].id);
+        }
+      })
+      .catch(() => setNodes([]));
+  }, []);
+
+  const addFiles = async (fileList) => {
+    const incoming = Array.from(fileList || []).filter((f) =>
+      /\.(kml|xml)$/i.test(f.name)
+    );
+    if (incoming.length === 0) {
+      showToast('Please choose .kml (or .xml) files.', 'warning');
+      return;
+    }
+
+    const next = [...files];
+    for (const f of incoming) {
+      if (!next.some((x) => x.name === f.name && x.size === f.size)) {
+        next.push(f);
+      }
+    }
+    setFiles(next);
+    showToast(`Queued ${incoming.length} file(s). Total: ${next.length}`, 'info');
+
+    // Client-side placemark preview for all queued files
+    const previews = [];
+    for (const f of next) {
+      try {
+        const text = await f.text();
+        const polys = previewPolygonsFromKmlText(text);
+        if (polys.length === 0) {
+          previews.push({ polygon: f.name, status: 'No polygons', node: '—' });
+        } else {
+          for (const p of polys) {
+            previews.push({
+              polygon: `${f.name} · ${p.polygon}`,
+              status: p.status,
+              node: nodes.find((n) => n.id === nodeId)?.name || '—',
+            });
+          }
+        }
+      } catch {
+        previews.push({ polygon: f.name, status: 'Unreadable', node: '—' });
+      }
+    }
+    setDetectedAreas(previews);
+  };
 
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const f = e.dataTransfer.files[0];
-      setFile(f);
-      showToast(`Loaded file: ${f.name}`, 'info');
-      setDetectedAreas([
-        { polygon: f.name + ' - Polygon A', status: 'Matched', node: nodeId === '1' ? 'Ropar North Quarry' : 'Sutlej River Pit' },
-        { polygon: f.name + ' - Polygon B', status: 'No match', node: '—' },
-      ]);
-    }
+    addFiles(e.dataTransfer.files);
   };
 
   const handleFileChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      const f = e.target.files[0];
-      setFile(f);
-      showToast(`Selected file: ${f.name}`, 'info');
-      setDetectedAreas([
-        { polygon: f.name + ' - Polygon A', status: 'Matched', node: nodeId === '1' ? 'Ropar North Quarry' : 'Sutlej River Pit' },
-      ]);
-    }
+    addFiles(e.target.files);
+    e.target.value = '';
+  };
+
+  const removeFile = (index) => {
+    const next = files.filter((_, i) => i !== index);
+    setFiles(next);
+    if (next.length === 0) setDetectedAreas([]);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!file) {
-      showToast('Please select or drop a .kml spatial file first.', 'warning');
+    if (files.length === 0) {
+      showToast('Please select or drop one or more .kml files first.', 'warning');
+      return;
+    }
+    if (!nodeId) {
+      showToast('Select a target mining node (create one under Nodes if the list is empty).', 'warning');
       return;
     }
 
     setIsSubmitting(true);
     const formData = new FormData();
-    formData.append('file', file);
+    for (const f of files) formData.append('files', f);
     formData.append('nodeId', nodeId);
     formData.append('surveyDate', surveyDate);
     formData.append('category', category);
     formData.append('notes', notes);
-    formData.append('uploadedBy', 'Harpreet Singh');
 
     try {
       const res = await fetch('/api/uploads', {
         method: 'POST',
         body: formData,
+        credentials: 'same-origin',
       });
+      const data = await res.json().catch(() => ({}));
       setIsSubmitting(false);
-      if (res.ok) {
-        showToast('KML spatial data ingested and polygons parsed successfully!', 'success');
-        setTimeout(() => router.push('/map'), 1200);
+
+      if (res.ok && data.uploaded > 0) {
+        showToast(
+          `Ingested ${data.uploaded} KML file(s), ${data.featuresDetected || 0} polygon(s).`,
+          'success'
+        );
+        setTimeout(() => router.push('/map'), 1000);
       } else {
-        showToast('Upload logged via offline fallback archive. Redirecting...', 'success');
-        setTimeout(() => router.push('/map'), 1200);
+        const firstError = data.results?.find((r) => !r.success)?.error;
+        showToast(firstError || data.error || 'Upload failed', 'error');
       }
     } catch {
       setIsSubmitting(false);
-      showToast('Offline mode active: KML cached locally. Redirecting...', 'success');
-      setTimeout(() => router.push('/map'), 1200);
+      showToast('Unable to reach upload service.', 'error');
     }
   };
 
   return (
     <div className="upload-container">
       <div className="upload-title">UPLOAD KML DATA & SPATIAL BOUNDARIES</div>
+      <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: -8, marginBottom: 20, maxWidth: 640 }}>
+        Select multiple KML files to attach to one mining node. Each file becomes its own archive entry and can be toggled on the map.
+      </p>
 
       <form onSubmit={handleSubmit} style={{ maxWidth: 640 }}>
-        {/* Drop Zone */}
         <div
           className={`drop-zone${isDragging ? ' drag-over' : ''}`}
-          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragging(true);
+          }}
           onDragLeave={() => setIsDragging(false)}
           onDrop={handleDrop}
           onClick={() => document.getElementById('kml-input').click()}
-          style={{ cursor: 'pointer', textAlign: 'center', padding: 32, background: 'var(--surface)', border: `2px dashed ${isDragging ? 'var(--accent)' : 'var(--border)'}`, marginBottom: 20 }}
+          style={{
+            cursor: 'pointer',
+            textAlign: 'center',
+            padding: 32,
+            background: 'var(--surface)',
+            border: `2px dashed ${isDragging ? 'var(--accent)' : 'var(--border)'}`,
+            marginBottom: 12,
+          }}
         >
           <input
             id="kml-input"
             type="file"
             accept=".kml,.xml"
+            multiple
             style={{ display: 'none' }}
             onChange={handleFileChange}
           />
           <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>
-            {file ? file.name : 'Drop .kml files here or click to browse'}
+            {files.length > 0
+              ? `${files.length} file(s) queued — click to add more`
+              : 'Drop .kml files here or click to browse'}
           </div>
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-            {file ? `${(file.size / 1024).toFixed(1)} KB` : 'Supports standard Google Earth KML polygon enclosures (e.g. sample_ropar_quarry.kml)'}
+            Multi-select supported · Google Earth KML polygons / MultiPolygons
           </div>
         </div>
 
-        {/* Form Grid */}
+        {files.length > 0 && (
+          <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 20px', fontSize: 12 }}>
+            {files.map((f, i) => (
+              <li
+                key={`${f.name}-${i}`}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '6px 0',
+                  borderBottom: '1px solid var(--border)',
+                  color: 'var(--text)',
+                }}
+              >
+                <span>
+                  {f.name}{' '}
+                  <span style={{ color: 'var(--muted)' }}>({(f.size / 1024).toFixed(1)} KB)</span>
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  style={{ padding: '2px 8px', fontSize: 10 }}
+                  onClick={() => removeFile(i)}
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
           <div>
-            <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>Target Mining Enclosure (Node)</label>
+            <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>
+              Target Mining Enclosure (Node)
+            </label>
             <select
               className="input"
-              style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--border)', color: '#fff', padding: 8 }}
+              style={{
+                width: '100%',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                color: '#fff',
+                padding: 8,
+              }}
               value={nodeId}
               onChange={(e) => setNodeId(e.target.value)}
+              required
             >
-              <option value="1">Ropar North Quarry</option>
-              <option value="2">Sutlej River Pit</option>
-              <option value="3">Nangal Road Site</option>
-              <option value="4">Kiratpur Quarry</option>
+              {nodes.length === 0 ? (
+                <option value="">No nodes — create one first</option>
+              ) : (
+                nodes.map((n) => (
+                  <option key={n.id} value={n.id}>
+                    {n.name}
+                  </option>
+                ))
+              )}
             </select>
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>Survey Date</label>
+            <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>
+              Survey Date
+            </label>
             <input
               type="date"
               className="input"
-              style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--border)', color: '#fff', padding: 8 }}
+              style={{
+                width: '100%',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                color: '#fff',
+                padding: 8,
+              }}
               value={surveyDate}
               onChange={(e) => setSurveyDate(e.target.value)}
             />
@@ -138,10 +273,18 @@ export default function UploadPage() {
         </div>
 
         <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>Upload Category</label>
+          <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>
+            Upload Category
+          </label>
           <select
             className="input"
-            style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--border)', color: '#fff', padding: 8 }}
+            style={{
+              width: '100%',
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              color: '#fff',
+              padding: 8,
+            }}
             value={category}
             onChange={(e) => setCategory(e.target.value)}
           >
@@ -152,60 +295,64 @@ export default function UploadPage() {
         </div>
 
         <div style={{ marginBottom: 24 }}>
-          <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>Notes / Findings</label>
+          <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>
+            Notes / Findings
+          </label>
           <textarea
             className="input"
             rows="3"
-            style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--border)', color: '#fff', padding: 8, fontFamily: 'inherit' }}
+            style={{
+              width: '100%',
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              color: '#fff',
+              padding: 8,
+              fontFamily: 'inherit',
+            }}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Document any spatial deviations or contractor activity..."
-          ></textarea>
+          />
         </div>
 
-        {/* Detected Polygons */}
         <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', marginBottom: 8 }}>DETECTED KML POLYGON BOUNDARIES</div>
-          <table className="table" style={{ fontSize: 12 }}>
-            <thead>
-              <tr>
-                <th>Polygon Feature</th>
-                <th>Node Match</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {detectedAreas.map((item, idx) => (
-                <tr key={idx}>
-                  <td>{item.polygon}</td>
-                  <td>
-                    <span style={{ color: item.status === 'Matched' ? 'var(--green)' : 'var(--yellow)' }}>
-                      {item.status === 'Matched' ? '✓ Matched' : item.status}
-                    </span>
-                  </td>
-                  <td>
-                    {item.status === 'Matched' ? '—' : (
-                      <button
-                        type="button"
-                        className="btn btn-outline"
-                        style={{ padding: '2px 8px', fontSize: 10 }}
-                        onClick={() => showToast(`Mapped ${item.polygon} to node enclosure`, 'success')}
-                      >
-                        + Map to Node
-                      </button>
-                    )}
-                  </td>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)', marginBottom: 8 }}>
+            DETECTED KML POLYGON BOUNDARIES
+          </div>
+          {detectedAreas.length === 0 ? (
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>Add KML files to preview placemarks.</div>
+          ) : (
+            <table className="table" style={{ fontSize: 12 }}>
+              <thead>
+                <tr>
+                  <th>Polygon Feature</th>
+                  <th>Status</th>
+                  <th>Target Node</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {detectedAreas.map((item, idx) => (
+                  <tr key={idx}>
+                    <td>{item.polygon}</td>
+                    <td style={{ color: item.status === 'Ready' ? 'var(--green)' : 'var(--yellow)' }}>
+                      {item.status}
+                    </td>
+                    <td>{item.node}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
 
-        {/* Submit */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
-          <button type="button" className="btn btn-outline" onClick={() => router.push('/map')}>Cancel</button>
-          <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
-            {isSubmitting ? 'Ingesting KML...' : 'Submit Upload & Parse'}
+          <button type="button" className="btn btn-outline" onClick={() => router.push('/map')}>
+            Cancel
+          </button>
+          <button type="submit" className="btn btn-primary" disabled={isSubmitting || !nodeId}>
+            {isSubmitting
+              ? `Ingesting ${files.length} KML...`
+              : `Submit ${files.length || ''} Upload${files.length === 1 ? '' : 's'} & Parse`}
           </button>
         </div>
       </form>
