@@ -102,15 +102,26 @@ export default function LoginPage() {
   return (
     <div className="login-wrapper">
       <div className="login-card">
-        <div className="login-logo">MineArchive</div>
-        <div className="login-subtitle">Mining Area Directory &amp; Spatial Archive</div>
+        <div className="login-brand">
+          <div className="login-mark" aria-hidden="true">M</div>
+          <div className="login-logo">MineArchive</div>
+          <div className="login-subtitle">Mining Area Directory &amp; Spatial Archive</div>
+        </div>
 
         <Suspense fallback={<div className="login-divider"><span>Loading…</span></div>}>
           <LoginForm />
         </Suspense>
 
+        <div className="login-hint">
+          <strong>Demo credentials</strong>
+          <br />
+          <code>admin@minearchive.co</code> / <code>admin123</code>
+          <br />
+          <code>harpreet@mine.co</code> / <code>user123</code>
+        </div>
+
         <div className="login-footer">
-          Demo: admin@minearchive.co / admin123 · harpreet@mine.co / user123
+          © MineArchive · Spatial data platform
         </div>
       </div>
     </div>
