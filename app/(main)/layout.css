@@ -1,5 +1,5 @@
 /* ============================================
-   Main Layout — Header + Sidebar
+   Main Layout — Header + Sidebar (Atlassian Design System)
    ============================================ */
 
 .app-shell {
@@ -14,10 +14,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 40px;
-  padding: 0 12px;
+  height: 52px;
+  padding: 0 16px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 1px rgba(9, 30, 66, 0.1);
   flex-shrink: 0;
   z-index: 100;
 }
@@ -29,21 +30,45 @@
 }
 
 .sidebar-toggle {
-  font-size: 16px;
-  color: var(--muted);
-  padding: 2px 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius);
+  color: var(--text-subtle);
   cursor: pointer;
+  transition: background-color 0.1s ease, color 0.1s ease;
 }
 
 .sidebar-toggle:hover {
+  background: var(--surface2);
   color: var(--text);
 }
 
+/* ---- Brand / Logo ---- */
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-logo-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius);
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
 .app-logo {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text);
-  letter-spacing: 0.5px;
+  letter-spacing: 0.2px;
 }
 
 .app-region {
@@ -59,9 +84,33 @@
   gap: 12px;
 }
 
-.header-user {
+/* ---- User chip ---- */
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #ffffff;
   font-size: 12px;
-  color: var(--muted);
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+.user-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
 }
 
 /* ---- Body (sidebar + main) ---- */
@@ -73,7 +122,7 @@
 
 /* ---- Sidebar ---- */
 .app-sidebar {
-  width: 180px;
+  width: 240px;
   background: var(--surface);
   border-right: 1px solid var(--border);
   display: flex;
@@ -81,20 +130,30 @@
   padding: 8px 0;
   flex-shrink: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   transition: width 0.15s ease;
 }
 
 .app-sidebar.collapsed {
-  width: 44px;
+  width: 56px;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
 }
 
 .sidebar-link {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 7px 14px;
-  font-size: 13px;
-  color: var(--muted);
+  gap: 12px;
+  padding: 10px 12px;
+  margin: 2px 8px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-subtle);
   text-decoration: none;
   transition: background-color 0.1s ease, color 0.1s ease;
   white-space: nowrap;
@@ -107,16 +166,17 @@
 }
 
 .sidebar-link.active {
-  color: var(--accent2);
-  background: rgba(0, 122, 204, 0.08);
-  border-left: 2px solid var(--accent);
-  padding-left: 12px;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .sidebar-icon {
-  font-size: 15px;
-  width: 18px;
-  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
 }
 
@@ -127,7 +187,18 @@
 
 .collapsed .sidebar-link {
   justify-content: center;
-  padding: 7px 0;
+  gap: 0;
+  padding: 10px 0;
+  margin: 2px 8px;
+}
+
+/* ---- Sidebar footer ---- */
+.sidebar-footer {
+  padding: 12px;
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
 }
 
 /* ---- Main Content ---- */
