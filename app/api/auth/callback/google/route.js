@@ -5,6 +5,7 @@ import {
   clearOAuthStateCookie,
   isAdminEmail,
   redirectWithError,
+  resolveGoogleRedirectUri,
   setSessionCookie,
 } from '../../../../../lib/auth';
 
@@ -67,9 +68,7 @@ export async function GET(request) {
     return redirectWithError(request, 'Google OAuth is not configured on the server.');
   }
 
-  const redirectUri =
-    process.env.GOOGLE_REDIRECT_URI ||
-    `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/auth/callback/google`;
+  const redirectUri = resolveGoogleRedirectUri(request);
 
   try {
     const tokens = await exchangeCodeForTokens(code, redirectUri);

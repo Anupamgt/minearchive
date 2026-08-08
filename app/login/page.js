@@ -24,11 +24,15 @@ function LoginForm() {
     e.preventDefault();
     setLoading(true);
 
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedPassword = password.trim();
+
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        credentials: 'same-origin',
+        body: JSON.stringify({ email: trimmedEmail, password: trimmedPassword }),
       });
 
       setLoading(false);
@@ -106,7 +110,7 @@ export default function LoginPage() {
         </Suspense>
 
         <div className="login-footer">
-          Contact administrator for PostGIS access credentials
+          Demo: admin@minearchive.co / admin123 · harpreet@mine.co / user123
         </div>
       </div>
     </div>
