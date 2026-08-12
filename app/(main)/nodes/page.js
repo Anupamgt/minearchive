@@ -6,7 +6,8 @@ import './nodes.css';
 
 function StatusTag({ status }) {
   const s = (status || '').toLowerCase();
-  const cls = s === 'active' ? 'tag-green' : s === 'proposed' ? 'tag-yellow' : 'tag';
+  const cls =
+    s === 'active' ? 'tag-green' : s === 'proposed' ? 'tag-yellow' : s === 'archived' ? 'tag' : 'tag';
   return <span className={`tag ${cls}`}>{(status || 'unknown').toUpperCase()}</span>;
 }
 
@@ -15,34 +16,24 @@ export default function NodesPage() {
   const [nodes, setNodes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [busyId, setBusyId] = useState(null);
   const [formData, setFormData] = useState({ name: '', status: 'active', locationLabel: 'Ropar District' });
 
   const fetchNodes = () => {
-    fetch('/api/nodes')
+    fetch('/api/nodes', { credentials: 'same-origin' })
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           setNodes(data);
         } else {
-          setNodes([
-            { id: 1, name: 'Ropar North Quarry', status: 'active', uploadCount: 5, updatedAt: 'Jun 15, 2026' },
-            { id: 2, name: 'Sutlej River Pit', status: 'active', uploadCount: 3, updatedAt: 'Jun 14, 2026' },
-            { id: 3, name: 'Nangal Road Site', status: 'active', uploadCount: 4, updatedAt: 'Jun 13, 2026' },
-            { id: 4, name: 'Kiratpur Quarry', status: 'active', uploadCount: 2, updatedAt: 'Jun 12, 2026' },
-            { id: 5, name: 'Sutlej New Pit', status: 'proposed', uploadCount: 0, updatedAt: 'Jun 11, 2026' },
-          ]);
+          setNodes([]);
         }
         setLoading(false);
       })
       .catch(() => {
-        setNodes([
-          { id: 1, name: 'Ropar North Quarry', status: 'active', uploadCount: 5, updatedAt: 'Jun 15, 2026' },
-          { id: 2, name: 'Sutlej River Pit', status: 'active', uploadCount: 3, updatedAt: 'Jun 14, 2026' },
-          { id: 3, name: 'Nangal Road Site', status: 'active', uploadCount: 4, updatedAt: 'Jun 13, 2026' },
-          { id: 4, name: 'Kiratpur Quarry', status: 'active', uploadCount: 2, updatedAt: 'Jun 12, 2026' },
-          { id: 5, name: 'Sutlej New Pit', status: 'proposed', uploadCount: 0, updatedAt: 'Jun 11, 2026' },
-        ]);
+        setNodes([]);
         setLoading(false);
+        showToast('Could not load monitoring areas.', 'error');
       });
   };
 
@@ -60,23 +51,68 @@ export default function NodesPage() {
     fetch('/api/nodes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
       body: JSON.stringify(formData),
     })
-      .then((res) => res.json())
-      .then(() => {
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Create failed');
         setShowModal(false);
         showToast(`Created monitoring area: ${formData.name}`, 'success');
         setFormData({ name: '', status: 'active', locationLabel: 'Ropar District' });
         fetchNodes();
       })
-      .catch(() => {
-        setNodes((prev) => [
-          { id: Date.now(), name: formData.name, status: formData.status, uploadCount: 0, updatedAt: 'Just now' },
-          ...prev,
-        ]);
-        setShowModal(false);
-        showToast(`Added ${formData.name} (offline demo mode)`, 'success');
+      .catch((err) => {
+        showToast(err.message || 'Failed to create monitoring area', 'error');
       });
+  };
+
+  const updateNodeStatus = async (node, nextStatus) => {
+    setBusyId(node.id);
+    try {
+      const res = await fetch(`/api/nodes/${encodeURIComponent(node.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Status update failed');
+      }
+
+      setNodes((prev) =>
+        prev.map((n) =>
+          n.id === node.id
+            ? { ...n, status: data.status || nextStatus, updatedAt: data.updatedAt || n.updatedAt }
+            : n
+        )
+      );
+
+      if (nextStatus === 'archived') {
+        showToast(`Archived monitoring area: ${node.name}`, 'warning');
+      } else if (nextStatus === 'active') {
+        showToast(`Restored monitoring area: ${node.name}`, 'success');
+      } else {
+        showToast(`Updated ${node.name} → ${nextStatus}`, 'info');
+      }
+    } catch (err) {
+      showToast(err.message || 'Could not update area status', 'error');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleArchive = (node) => {
+    const ok = window.confirm(
+      `Archive “${node.name}”? It will be marked archived and stay in the list for history.`
+    );
+    if (!ok) return;
+    updateNodeStatus(node, 'archived');
+  };
+
+  const handleRestore = (node) => {
+    updateNodeStatus(node, 'active');
   };
 
   return (
@@ -86,7 +122,9 @@ export default function NodesPage() {
           <h1>Monitoring Areas</h1>
           <p className="page-subtitle">Mining boundaries monitored across the district</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowModal(true)}>New area</button>
+        <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+          New area
+        </button>
       </div>
 
       <div className="card">
@@ -104,12 +142,26 @@ export default function NodesPage() {
           </div>
         ) : nodes.length === 0 ? (
           <div className="empty-state">
-            <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="46"
+              height="46"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4m0 13V4m0 0L9 7" />
             </svg>
             <h3>No monitoring areas yet</h3>
-            <p>Monitoring areas are the mining boundaries you track over time. Create your first one to start archiving survey data.</p>
-            <button className="btn btn-primary mt-16" onClick={() => setShowModal(true)}>Create your first monitoring area</button>
+            <p>
+              Monitoring areas are the mining boundaries you track over time. Create your first one
+              to start archiving survey data.
+            </p>
+            <button className="btn btn-primary mt-16" onClick={() => setShowModal(true)}>
+              Create your first monitoring area
+            </button>
           </div>
         ) : (
           <table className="table">
@@ -123,32 +175,45 @@ export default function NodesPage() {
               </tr>
             </thead>
             <tbody>
-              {nodes.map((n) => (
-                <tr key={n.id}>
-                  <td style={{ fontWeight: 600, color: 'var(--text)' }}>{n.name}</td>
-                  <td>
-                    <StatusTag status={n.status} />
-                  </td>
-                  <td>{n.uploadCount || n.uploads || 0}</td>
-                  <td style={{ color: 'var(--muted)' }}>{typeof n.updatedAt === 'string' ? n.updatedAt.split('T')[0] : 'Jun 15, 2026'}</td>
-                  <td>
-                    <div className="nodes-actions">
-                      <button
-                        className="btn btn-outline btn-sm"
-                        onClick={() => showToast(`Editing details for ${n.name}`, 'info')}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="btn btn-danger btn-sm"
-                        onClick={() => showToast(`Archived monitoring area: ${n.name}`, 'warning')}
-                      >
-                        Archive
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {nodes.map((n) => {
+                const isArchived = (n.status || '').toLowerCase() === 'archived';
+                const isBusy = busyId === n.id;
+                return (
+                  <tr key={n.id} style={isArchived ? { opacity: 0.72 } : undefined}>
+                    <td style={{ fontWeight: 600, color: 'var(--text)' }}>{n.name}</td>
+                    <td>
+                      <StatusTag status={n.status} />
+                    </td>
+                    <td>{n.uploadCount || n.uploads || 0}</td>
+                    <td style={{ color: 'var(--muted)' }}>
+                      {typeof n.updatedAt === 'string'
+                        ? n.updatedAt.split('T')[0]
+                        : '—'}
+                    </td>
+                    <td>
+                      <div className="nodes-actions">
+                        {isArchived ? (
+                          <button
+                            className="btn btn-outline btn-sm"
+                            disabled={isBusy}
+                            onClick={() => handleRestore(n)}
+                          >
+                            {isBusy ? 'Working…' : 'Restore'}
+                          </button>
+                        ) : (
+                          <button
+                            className="btn btn-danger btn-sm"
+                            disabled={isBusy}
+                            onClick={() => handleArchive(n)}
+                          >
+                            {isBusy ? 'Working…' : 'Archive'}
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -159,12 +224,21 @@ export default function NodesPage() {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>New monitoring area</h3>
-              <button type="button" className="modal-close" onClick={() => setShowModal(false)} aria-label="Close">×</button>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setShowModal(false)}
+                aria-label="Close"
+              >
+                ×
+              </button>
             </div>
             <form onSubmit={handleCreate}>
               <div className="modal-body">
                 <div className="form-group">
-                  <label className="required" htmlFor="node-name">Area name</label>
+                  <label className="required" htmlFor="node-name">
+                    Area name
+                  </label>
                   <input
                     id="node-name"
                     type="text"
@@ -185,12 +259,18 @@ export default function NodesPage() {
                     <option value="proposed">Proposed</option>
                     <option value="archived">Archived</option>
                   </select>
-                  <p className="help-text">Active areas are actively monitored. Proposed areas are awaiting review.</p>
+                  <p className="help-text">
+                    Active areas are monitored. Proposed await review. Archived stay for history.
+                  </p>
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-outline" onClick={() => setShowModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Create area</button>
+                <button type="button" className="btn btn-outline" onClick={() => setShowModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Create area
+                </button>
               </div>
             </form>
           </div>
