@@ -36,6 +36,14 @@ export default function MapPage() {
     if (decoded?.role) setRole(decoded.role);
   }, []);
 
+  // Auto-select a node when arriving from the upload flow (/map?nodeId=...),
+  // so freshly uploaded KML polygons are shown on the map immediately.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const nid = new URLSearchParams(window.location.search).get('nodeId');
+    if (nid) setSelectedNode(nid);
+  }, []);
+
   const isAdmin = role.toLowerCase() === 'admin';
 
   useEffect(() => {
