@@ -192,13 +192,56 @@ export default function MapPage() {
     }));
   }, [kmlLayers]);
 
-  const confirmFlagBreach = (e) => {
+  const [savingBreach, setSavingBreach] = useState(false);
+
+  const confirmFlagBreach = async (e) => {
     e.preventDefault();
-    setBreachModal(false);
-    showToast(
-      `Encroachment breach flagged for ${nodeName}. A violation notice was recorded in the audit trail.`,
-      'error'
-    );
+    if (!selectedNode) return;
+
+    setSavingBreach(true);
+    try {
+      const res = await fetch(`/api/nodes/${encodeURIComponent(selectedNode)}/breach`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ reason: breachReason }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not record breach notice');
+
+      setBreachModal(false);
+      showToast(
+        `Encroachment breach recorded for ${nodeName}. See the Activity Log.`,
+        'error'
+      );
+    } catch (err) {
+      showToast(err.message || 'Could not record breach notice', 'error');
+    } finally {
+      setSavingBreach(false);
+    }
+  };
+
+  const deleteLayer = async (upload) => {
+    if (!window.confirm(`Remove boundary file “${upload.kmlFilePath || upload.id}”?`)) return;
+
+    try {
+      const res = await fetch(`/api/uploads/${encodeURIComponent(upload.id)}`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Delete failed');
+
+      setUploads((prev) => prev.filter((u) => u.id !== upload.id));
+      setShownUploads((prev) => {
+        const next = new Set(prev);
+        next.delete(upload.id);
+        return next;
+      });
+      showToast('Boundary file removed', 'success');
+    } catch (err) {
+      showToast(err.message || 'Could not remove boundary file', 'error');
+    }
   };
 
   return (
@@ -340,6 +383,19 @@ export default function MapPage() {
                           {u.uploadedBy ? ` · ${u.uploadedBy}` : ''}
                         </span>
                       </span>
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-sm"
+                          title="Remove this boundary file"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            deleteLayer(u);
+                          }}
+                        >
+                          Remove
+                        </button>
+                      )}
                     </label>
                   );
                 })
@@ -392,8 +448,8 @@ export default function MapPage() {
                 <button type="button" className="btn btn-outline" onClick={() => setBreachModal(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-danger">
-                  Record breach notice
+                <button type="submit" className="btn btn-danger" disabled={savingBreach}>
+                  {savingBreach ? 'Recording…' : 'Record breach notice'}
                 </button>
               </div>
             </form>

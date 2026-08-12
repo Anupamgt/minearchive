@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { useToast } from '../../components/ToastProvider';
+import { readSessionFromCookie } from '../../../lib/session-client';
 import './users.css';
 
 function RoleTag({ role }) {
-  const isAdmin = role === 'Admin';
+  const isAdmin = (role || '').toLowerCase() === 'admin';
   return <span className={`tag ${isAdmin ? 'tag-accent' : ''}`}>{role || 'User'}</span>;
 }
 
@@ -20,32 +21,26 @@ export default function UsersPage() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [formData, setFormData] = useState({ name: '', email: '', role: 'User' });
+  const [editing, setEditing] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+  const [sessionUser, setSessionUser] = useState(null);
+  const [formData, setFormData] = useState({ name: '', email: '', password: '', role: 'User' });
+
+  useEffect(() => {
+    setSessionUser(readSessionFromCookie());
+  }, []);
 
   const fetchUsers = () => {
-    fetch('/api/users')
+    fetch('/api/users', { credentials: 'same-origin' })
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
-          setUsers(data);
-        } else {
-          setUsers([
-            { id: 1, name: 'Harpreet Singh', email: 'harpreet@mine.co', role: 'User', status: 'active', lastLogin: 'Jun 15, 2026' },
-            { id: 2, name: 'Amit Sharma', email: 'amit@mine.co', role: 'User', status: 'active', lastLogin: 'Jun 14, 2026' },
-            { id: 3, name: 'Priya Kaur', email: 'priya@mine.co', role: 'User', status: 'active', lastLogin: 'Jun 12, 2026' },
-            { id: 4, name: 'Central Admin', email: 'admin@minearchive.co', role: 'Admin', status: 'active', lastLogin: 'Jun 15, 2026' },
-          ]);
-        }
+        setUsers(Array.isArray(data) ? data : []);
         setLoading(false);
       })
       .catch(() => {
-        setUsers([
-          { id: 1, name: 'Harpreet Singh', email: 'harpreet@mine.co', role: 'User', status: 'active', lastLogin: 'Jun 15, 2026' },
-          { id: 2, name: 'Amit Sharma', email: 'amit@mine.co', role: 'User', status: 'active', lastLogin: 'Jun 14, 2026' },
-          { id: 3, name: 'Priya Kaur', email: 'priya@mine.co', role: 'User', status: 'active', lastLogin: 'Jun 12, 2026' },
-          { id: 4, name: 'Central Admin', email: 'admin@minearchive.co', role: 'Admin', status: 'active', lastLogin: 'Jun 15, 2026' },
-        ]);
+        setUsers([]);
         setLoading(false);
+        showToast('Could not load users.', 'error');
       });
   };
 
@@ -53,33 +48,79 @@ export default function UsersPage() {
     fetchUsers();
   }, []);
 
-  const handleCreate = (e) => {
+  const handleCreate = async (e) => {
     e.preventDefault();
     if (!formData.name || !formData.email) {
       showToast('Please enter both name and email.', 'warning');
       return;
     }
+    if (!formData.password) {
+      showToast('Please set a temporary password for this user.', 'warning');
+      return;
+    }
 
-    fetch('/api/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(formData),
-    })
-      .then((res) => res.json())
-      .then(() => {
-        setShowModal(false);
-        showToast(`Invited new user: ${formData.name}`, 'success');
-        setFormData({ name: '', email: '', role: 'User' });
-        fetchUsers();
-      })
-      .catch(() => {
-        setUsers((prev) => [
-          { id: Date.now(), name: formData.name, email: formData.email, role: formData.role, status: 'active', lastLogin: 'Never' },
-          ...prev,
-        ]);
-        setShowModal(false);
-        showToast(`Added user ${formData.name} (offline demo mode)`, 'success');
+    try {
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(formData),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not add user');
+
+      setShowModal(false);
+      showToast(`Added user: ${formData.name}`, 'success');
+      setFormData({ name: '', email: '', password: '', role: 'User' });
+      fetchUsers();
+    } catch (err) {
+      showToast(err.message || 'Could not add user', 'error');
+    }
+  };
+
+  const patchUser = async (user, patch, successMessage) => {
+    setBusyId(user.id);
+    try {
+      const res = await fetch(`/api/users/${encodeURIComponent(user.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(patch),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Update failed');
+
+      setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, ...data } : u)));
+      showToast(successMessage, 'success');
+      return true;
+    } catch (err) {
+      showToast(err.message || 'Update failed', 'error');
+      return false;
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleToggleAccess = (user) => {
+    const isActive = (user.status || 'active').toLowerCase() === 'active';
+    if (isActive && !window.confirm(`Disable access for ${user.name}?`)) return;
+
+    patchUser(
+      user,
+      { status: isActive ? 'disabled' : 'active' },
+      isActive ? `Disabled access for ${user.name}` : `Re-enabled access for ${user.name}`
+    );
+  };
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    if (!editing) return;
+    const ok = await patchUser(
+      editing,
+      { name: editing.name, role: editing.role },
+      `Updated ${editing.name}`
+    );
+    if (ok) setEditing(null);
   };
 
   return (
@@ -89,7 +130,9 @@ export default function UsersPage() {
           <h1>Users</h1>
           <p className="page-subtitle">People with access to MineArchive</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowModal(true)}>Add user</button>
+        <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+          Add user
+        </button>
       </div>
 
       <div className="card">
@@ -114,7 +157,9 @@ export default function UsersPage() {
             </svg>
             <h3>No users yet</h3>
             <p>Add the people who need to view areas, upload boundary files, or manage the archive.</p>
-            <button className="btn btn-primary mt-16" onClick={() => setShowModal(true)}>Add your first user</button>
+            <button className="btn btn-primary mt-16" onClick={() => setShowModal(true)}>
+              Add your first user
+            </button>
           </div>
         ) : (
           <table className="table">
@@ -129,35 +174,48 @@ export default function UsersPage() {
               </tr>
             </thead>
             <tbody>
-              {users.map((u) => (
-                <tr key={u.id}>
-                  <td style={{ fontWeight: 600, color: 'var(--text)' }}>{u.name}</td>
-                  <td style={{ color: 'var(--muted)' }}>{u.email}</td>
-                  <td>
-                    <RoleTag role={u.role} />
-                  </td>
-                  <td>
-                    <StatusTag status={u.status} />
-                  </td>
-                  <td style={{ color: 'var(--muted)' }}>{typeof u.lastLogin === 'string' ? u.lastLogin.split('T')[0] : 'Jun 15, 2026'}</td>
-                  <td>
-                    <div className="users-actions">
-                      <button
-                        className="btn btn-outline btn-sm"
-                        onClick={() => showToast(`Editing permissions for ${u.name}`, 'info')}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="btn btn-danger btn-sm"
-                        onClick={() => showToast(`Disabled access for ${u.name}`, 'warning')}
-                      >
-                        Disable
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {users.map((u) => {
+                const isActive = (u.status || 'active').toLowerCase() === 'active';
+                const isBusy = busyId === u.id;
+                const isSelf = sessionUser?.id === u.id;
+                return (
+                  <tr key={u.id} style={isActive ? undefined : { opacity: 0.72 }}>
+                    <td style={{ fontWeight: 600, color: 'var(--text)' }}>
+                      {u.name}
+                      {isSelf && <span className="tag" style={{ marginLeft: 8 }}>You</span>}
+                    </td>
+                    <td style={{ color: 'var(--muted)' }}>{u.email}</td>
+                    <td>
+                      <RoleTag role={u.role} />
+                    </td>
+                    <td>
+                      <StatusTag status={u.status} />
+                    </td>
+                    <td style={{ color: 'var(--muted)' }}>
+                      {u.lastLogin ? String(u.lastLogin).split('T')[0] : 'Never'}
+                    </td>
+                    <td>
+                      <div className="users-actions">
+                        <button
+                          className="btn btn-outline btn-sm"
+                          disabled={isBusy}
+                          onClick={() => setEditing({ id: u.id, name: u.name, role: u.role || 'User' })}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className={`btn btn-sm ${isActive ? 'btn-danger' : 'btn-outline'}`}
+                          disabled={isBusy || isSelf}
+                          title={isSelf ? 'You cannot disable your own account' : undefined}
+                          onClick={() => handleToggleAccess(u)}
+                        >
+                          {isBusy ? 'Working…' : isActive ? 'Disable' : 'Enable'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -168,7 +226,9 @@ export default function UsersPage() {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Add user</h3>
-              <button type="button" className="modal-close" onClick={() => setShowModal(false)} aria-label="Close">×</button>
+              <button type="button" className="modal-close" onClick={() => setShowModal(false)} aria-label="Close">
+                ×
+              </button>
             </div>
             <form onSubmit={handleCreate}>
               <div className="modal-body">
@@ -194,6 +254,17 @@ export default function UsersPage() {
                   <p className="help-text">Used to sign in and receive access notifications.</p>
                 </div>
                 <div className="form-group">
+                  <label className="required" htmlFor="user-password">Temporary password</label>
+                  <input
+                    id="user-password"
+                    type="text"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    placeholder="Share this with the user"
+                  />
+                  <p className="help-text">They can sign in with this, or use Google sign-in instead.</p>
+                </div>
+                <div className="form-group">
                   <label htmlFor="user-role">Role</label>
                   <select
                     id="user-role"
@@ -207,8 +278,57 @@ export default function UsersPage() {
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-outline" onClick={() => setShowModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Add user</button>
+                <button type="button" className="btn btn-outline" onClick={() => setShowModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Add user
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {editing && (
+        <div className="modal-overlay" onClick={() => setEditing(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Edit user</h3>
+              <button type="button" className="modal-close" onClick={() => setEditing(null)} aria-label="Close">
+                ×
+              </button>
+            </div>
+            <form onSubmit={handleSaveEdit}>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label className="required" htmlFor="edit-user-name">Full name</label>
+                  <input
+                    id="edit-user-name"
+                    type="text"
+                    value={editing.name}
+                    onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="edit-user-role">Role</label>
+                  <select
+                    id="edit-user-role"
+                    value={editing.role}
+                    onChange={(e) => setEditing({ ...editing, role: e.target.value })}
+                  >
+                    <option value="User">User — can upload boundary files</option>
+                    <option value="Admin">Admin — full access and management</option>
+                  </select>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-outline" onClick={() => setEditing(null)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={busyId === editing.id}>
+                  {busyId === editing.id ? 'Saving…' : 'Save changes'}
+                </button>
               </div>
             </form>
           </div>

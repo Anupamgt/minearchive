@@ -16,35 +16,37 @@ const MapWithNoSSR = dynamic(() => import('../../components/LeafletMap'), {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [stats, setStats] = useState({ nodes: 12, uploads: 47, pending: 3, users: 5 });
+  const [stats, setStats] = useState({ nodes: 0, uploads: 0, pending: 0, users: 0 });
   const [recentActivity, setRecentActivity] = useState([]);
+  const [loadingActivity, setLoadingActivity] = useState(true);
 
   useEffect(() => {
-    fetch('/api/audit?limit=6')
+    fetch('/api/stats', { credentials: 'same-origin' })
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
-          setRecentActivity(
-            data.map((item) => `${item.timestamp ? item.timestamp.split('T')[0] : 'Jun 15'} — ${item.action} by ${item.userName}: ${item.details}`)
-          );
-        } else {
-          setRecentActivity([
-            'Jun 15 — Ropar North Quarry — KML uploaded by Harpreet Singh',
-            'Jun 14 — Sutlej River Pit — Encroachment report by Amit Sharma',
-            'Jun 13 — Nangal Road Site — Routine survey by Harpreet Singh',
-            'Jun 12 — Kiratpur Quarry — Restoration check by Priya Kaur',
-            'Jun 10 — Ropar North Quarry — Boundary update by Amit Sharma',
-          ]);
-        }
+        if (data && typeof data.nodes === 'number') setStats(data);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/audit?limit=6', { credentials: 'same-origin' })
+      .then((res) => res.json())
+      .then((data) => {
+        setRecentActivity(
+          Array.isArray(data)
+            ? data.map((item) => ({
+                id: item.id,
+                time: item.timestamp ? String(item.timestamp).split('T')[0] : '—',
+                text: `${item.action} by ${item.userName}${item.details ? `: ${item.details}` : ''}`,
+              }))
+            : []
+        );
+        setLoadingActivity(false);
       })
       .catch(() => {
-        setRecentActivity([
-          'Jun 15 — Ropar North Quarry — KML uploaded by Harpreet Singh',
-          'Jun 14 — Sutlej River Pit — Encroachment report by Amit Sharma',
-          'Jun 13 — Nangal Road Site — Routine survey by Harpreet Singh',
-          'Jun 12 — Kiratpur Quarry — Restoration check by Priya Kaur',
-          'Jun 10 — Ropar North Quarry — Boundary update by Amit Sharma',
-        ]);
+        setRecentActivity([]);
+        setLoadingActivity(false);
       });
   }, []);
 
@@ -127,7 +129,7 @@ export default function DashboardPage() {
           <div className="dash-map-box" style={{ height: 380 }}>
             <MapWithNoSSR
               selectedNode={null}
-              onSelectNode={(id) => router.push('/map')}
+              onSelectNode={(id) => router.push(`/map?nodeId=${encodeURIComponent(id)}`)}
             />
           </div>
         </div>
@@ -136,22 +138,26 @@ export default function DashboardPage() {
         <div className="card dash-act-col">
           <div className="card-header dash-col-header">Recent Activity</div>
           <div className="act-list">
-            {recentActivity.map((act, i) => {
-              const [ts, ...rest] = act.split(' — ');
-              const main = rest.join(' — ');
-              return (
+            {loadingActivity ? (
+              [0, 1, 2, 3, 4].map((i) => (
                 <div className="act-row" key={i}>
-                  {main ? (
-                    <>
-                      <span className="act-time">{ts}</span>
-                      <span className="act-text">{main}</span>
-                    </>
-                  ) : (
-                    <span className="act-text">{act}</span>
-                  )}
+                  <div className="skeleton" style={{ height: 13, width: '100%' }} />
                 </div>
-              );
-            })}
+              ))
+            ) : recentActivity.length === 0 ? (
+              <div className="act-row">
+                <span className="act-text">
+                  No activity yet. Uploads, area changes and sign-ins will appear here.
+                </span>
+              </div>
+            ) : (
+              recentActivity.map((act) => (
+                <div className="act-row" key={act.id}>
+                  <span className="act-time">{act.time}</span>
+                  <span className="act-text">{act.text}</span>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>
