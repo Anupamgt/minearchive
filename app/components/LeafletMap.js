@@ -58,7 +58,7 @@ export default function LeafletMap({
     <MapContainer
       center={CENTER}
       zoom={ZOOM}
-      style={{ height: '100%', width: '100%', background: '#1e1e1e' }}
+      style={{ height: '100%', width: '100%', background: '#eef2f6' }}
     >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
