@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import JSZip from 'jszip';
 import { DOMParser } from '@xmldom/xmldom';
 import { kml } from '@tmcw/togeojson';
 import { prisma } from '../../../lib/db';
@@ -6,6 +7,38 @@ import { getSessionUser, unauthorizedResponse } from '../../../lib/auth';
 import { getCachedUploads, CACHE_TAGS } from '../../../lib/cached-queries';
 import { privateJson, bustTags } from '../../../lib/cache-headers';
 import { polygonsFromGeoJson } from '../../../lib/kml';
+
+/**
+ * Read the KML text out of an uploaded file, transparently handling KMZ.
+ * A KMZ is a ZIP archive (magic bytes `PK\x03\x04`) that contains one or more
+ * `.kml` documents (conventionally `doc.kml`) plus optional assets.
+ */
+async function extractKmlText(file) {
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const isZip =
+    buffer.length > 3 &&
+    buffer[0] === 0x50 &&
+    buffer[1] === 0x4b &&
+    buffer[2] === 0x03 &&
+    buffer[3] === 0x04;
+  const looksKmz = /\.kmz$/i.test(file.name || '') || isZip;
+
+  if (!looksKmz) {
+    return buffer.toString('utf8');
+  }
+
+  const zip = await JSZip.loadAsync(buffer);
+  const kmlEntries = Object.keys(zip.files).filter(
+    (name) => /\.kml$/i.test(name) && !zip.files[name].dir
+  );
+  if (kmlEntries.length === 0) {
+    throw new Error('KMZ archive contains no .kml document');
+  }
+  // Prefer the standard doc.kml, otherwise take the first KML entry.
+  const chosen =
+    kmlEntries.find((name) => /(^|\/)doc\.kml$/i.test(name)) || kmlEntries[0];
+  return zip.files[chosen].async('string');
+}
 
 export async function GET(request) {
   const session = await getSessionUser(request);
@@ -23,7 +56,7 @@ export async function GET(request) {
 }
 
 async function processOneKmlFile({ file, nodeId, category, surveyDate, notes, uploadedBy, userId }) {
-  const text = await file.text();
+  const text = await extractKmlText(file);
   const kmlDom = new DOMParser().parseFromString(text, 'text/xml');
   const geoJson = kml(kmlDom);
   const polygons = polygonsFromGeoJson(geoJson);

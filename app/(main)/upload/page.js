@@ -47,10 +47,10 @@ export default function UploadPage() {
 
   const addFiles = async (fileList) => {
     const incoming = Array.from(fileList || []).filter((f) =>
-      /\.(kml|xml)$/i.test(f.name)
+      /\.(kml|kmz|xml)$/i.test(f.name)
     );
     if (incoming.length === 0) {
-      showToast('Please choose .kml (or .xml) files.', 'warning');
+      showToast('Please choose .kml or .kmz files.', 'warning');
       return;
     }
 
@@ -66,6 +66,12 @@ export default function UploadPage() {
     // Client-side placemark preview for all queued files
     const previews = [];
     for (const f of next) {
+      // KMZ is a binary ZIP — it can't be previewed as text; it is unzipped and
+      // parsed on the server at upload time.
+      if (/\.kmz$/i.test(f.name)) {
+        previews.push({ polygon: f.name, status: 'KMZ · parsed on upload', node: nodes.find((n) => n.id === nodeId)?.name || '—' });
+        continue;
+      }
       try {
         const text = await f.text();
         const polys = previewPolygonsFromKmlText(text);
@@ -134,10 +140,12 @@ export default function UploadPage() {
 
       if (res.ok && data.uploaded > 0) {
         showToast(
-          `Ingested ${data.uploaded} KML file(s), ${data.featuresDetected || 0} polygon(s).`,
+          `Ingested ${data.uploaded} file(s), ${data.featuresDetected || 0} polygon(s).`,
           'success'
         );
-        setTimeout(() => router.push('/map'), 1000);
+        // Open the map focused on the node we just uploaded to, so the new
+        // polygons are shown immediately (the map auto-selects this node).
+        setTimeout(() => router.push(`/map?nodeId=${encodeURIComponent(nodeId)}`), 1000);
       } else {
         const firstError = data.results?.find((r) => !r.success)?.error;
         showToast(firstError || data.error || 'Upload failed', 'error');
@@ -177,7 +185,7 @@ export default function UploadPage() {
           <input
             id="kml-input"
             type="file"
-            accept=".kml,.xml"
+            accept=".kml,.kmz,.xml"
             multiple
             style={{ display: 'none' }}
             onChange={handleFileChange}
@@ -185,10 +193,10 @@ export default function UploadPage() {
           <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>
             {files.length > 0
               ? `${files.length} file(s) queued — click to add more`
-              : 'Drop .kml files here or click to browse'}
+              : 'Drop .kml or .kmz files here or click to browse'}
           </div>
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-            Multi-select supported · Google Earth KML polygons / MultiPolygons
+            Multi-select supported · Google Earth KML / KMZ polygons / MultiPolygons
           </div>
         </div>
 
