@@ -4,9 +4,16 @@ import { useState, useEffect } from 'react';
 import { useToast } from '../../components/ToastProvider';
 import './nodes.css';
 
+function StatusTag({ status }) {
+  const s = (status || '').toLowerCase();
+  const cls = s === 'active' ? 'tag-green' : s === 'proposed' ? 'tag-yellow' : 'tag';
+  return <span className={`tag ${cls}`}>{(status || 'unknown').toUpperCase()}</span>;
+}
+
 export default function NodesPage() {
   const { showToast } = useToast();
   const [nodes, setNodes] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({ name: '', status: 'active', locationLabel: 'Ropar District' });
 
@@ -25,6 +32,7 @@ export default function NodesPage() {
             { id: 5, name: 'Sutlej New Pit', status: 'proposed', uploadCount: 0, updatedAt: 'Jun 11, 2026' },
           ]);
         }
+        setLoading(false);
       })
       .catch(() => {
         setNodes([
@@ -34,6 +42,7 @@ export default function NodesPage() {
           { id: 4, name: 'Kiratpur Quarry', status: 'active', uploadCount: 2, updatedAt: 'Jun 12, 2026' },
           { id: 5, name: 'Sutlej New Pit', status: 'proposed', uploadCount: 0, updatedAt: 'Jun 11, 2026' },
         ]);
+        setLoading(false);
       });
   };
 
@@ -44,7 +53,7 @@ export default function NodesPage() {
   const handleCreate = (e) => {
     e.preventDefault();
     if (!formData.name) {
-      showToast('Please enter an enclosure name.', 'warning');
+      showToast('Please enter a name for the monitoring area.', 'warning');
       return;
     }
 
@@ -56,7 +65,7 @@ export default function NodesPage() {
       .then((res) => res.json())
       .then(() => {
         setShowModal(false);
-        showToast(`Created mining node enclosure: ${formData.name}`, 'success');
+        showToast(`Created monitoring area: ${formData.name}`, 'success');
         setFormData({ name: '', status: 'active', locationLabel: 'Ropar District' });
         fetchNodes();
       })
@@ -66,91 +75,122 @@ export default function NodesPage() {
           ...prev,
         ]);
         setShowModal(false);
-        showToast(`Added ${formData.name} (Offline demo mode)`, 'success');
+        showToast(`Added ${formData.name} (offline demo mode)`, 'success');
       });
   };
 
   return (
     <div className="nodes-container">
-      <div className="nodes-header">
-        <div className="nodes-title">NODE MANAGEMENT (MINING ENCLOSURES)</div>
-        <button className="btn btn-primary" onClick={() => setShowModal(true)}>+ Create Node</button>
+      <div className="page-header">
+        <div>
+          <h1>Monitoring Areas</h1>
+          <p className="page-subtitle">Mining boundaries monitored across the district</p>
+        </div>
+        <button className="btn btn-primary" onClick={() => setShowModal(true)}>New area</button>
       </div>
 
-      <table className="table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Status</th>
-            <th>Uploads</th>
-            <th>Last Updated</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {nodes.map((n) => (
-            <tr key={n.id}>
-              <td style={{ fontWeight: 600 }}>{n.name}</td>
-              <td>
-                <span className={`tag ${n.status === 'active' ? 'tag-green' : n.status === 'proposed' ? 'tag-yellow' : ''}`}>
-                  {n.status.toUpperCase()}
-                </span>
-              </td>
-              <td>{n.uploadCount || n.uploads || 0}</td>
-              <td style={{ color: 'var(--muted)' }}>{typeof n.updatedAt === 'string' ? n.updatedAt.split('T')[0] : 'Jun 15, 2026'}</td>
-              <td>
-                <button
-                  className="btn btn-outline"
-                  style={{ padding: '2px 8px', fontSize: 11, marginRight: 6 }}
-                  onClick={() => showToast(`Editing parameters for ${n.name}`, 'info')}
-                >
-                  Edit
-                </button>
-                <button
-                  className="btn btn-outline"
-                  style={{ padding: '2px 8px', fontSize: 11 }}
-                  onClick={() => showToast(`Archived enclosure node #${n.id}`, 'warning')}
-                >
-                  Archive
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="card">
+        {loading ? (
+          <div className="nodes-skeletons">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div className="nodes-skeleton-row" key={i}>
+                <div className="skeleton" style={{ height: 14, width: '32%' }} />
+                <div className="skeleton" style={{ height: 14, width: '14%' }} />
+                <div className="skeleton" style={{ height: 14, width: '10%' }} />
+                <div className="skeleton" style={{ height: 14, width: '18%' }} />
+                <div className="skeleton" style={{ height: 14, width: '16%' }} />
+              </div>
+            ))}
+          </div>
+        ) : nodes.length === 0 ? (
+          <div className="empty-state">
+            <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4m0 13V4m0 0L9 7" />
+            </svg>
+            <h3>No monitoring areas yet</h3>
+            <p>Monitoring areas are the mining boundaries you track over time. Create your first one to start archiving survey data.</p>
+            <button className="btn btn-primary mt-16" onClick={() => setShowModal(true)}>Create your first monitoring area</button>
+          </div>
+        ) : (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Boundary files</th>
+                <th>Last updated</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {nodes.map((n) => (
+                <tr key={n.id}>
+                  <td style={{ fontWeight: 600, color: 'var(--text)' }}>{n.name}</td>
+                  <td>
+                    <StatusTag status={n.status} />
+                  </td>
+                  <td>{n.uploadCount || n.uploads || 0}</td>
+                  <td style={{ color: 'var(--muted)' }}>{typeof n.updatedAt === 'string' ? n.updatedAt.split('T')[0] : 'Jun 15, 2026'}</td>
+                  <td>
+                    <div className="nodes-actions">
+                      <button
+                        className="btn btn-outline btn-sm"
+                        onClick={() => showToast(`Editing details for ${n.name}`, 'info')}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="btn btn-danger btn-sm"
+                        onClick={() => showToast(`Archived monitoring area: ${n.name}`, 'warning')}
+                      >
+                        Archive
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
 
       {showModal && (
-        <div className="modal-overlay">
-          <div className="modal-card" style={{ background: 'var(--surface)', border: '1px solid var(--border)', padding: 20, width: 400 }}>
-            <h3 style={{ marginTop: 0, marginBottom: 16 }}>Create Mining Node Enclosure</h3>
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>New monitoring area</h3>
+              <button type="button" className="modal-close" onClick={() => setShowModal(false)} aria-label="Close">×</button>
+            </div>
             <form onSubmit={handleCreate}>
-              <div style={{ marginBottom: 12 }}>
-                <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>Enclosure Name</label>
-                <input
-                  type="text"
-                  className="input"
-                  style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: '#fff', padding: 8 }}
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g. Nangal Quarry Sector 4"
-                />
+              <div className="modal-body">
+                <div className="form-group">
+                  <label className="required" htmlFor="node-name">Area name</label>
+                  <input
+                    id="node-name"
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="e.g. Nangal Quarry Sector 4"
+                  />
+                  <p className="help-text">A clear, recognizable name for this mining boundary.</p>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="node-status">Status</label>
+                  <select
+                    id="node-status"
+                    value={formData.status}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                  >
+                    <option value="active">Active</option>
+                    <option value="proposed">Proposed</option>
+                    <option value="archived">Archived</option>
+                  </select>
+                  <p className="help-text">Active areas are actively monitored. Proposed areas are awaiting review.</p>
+                </div>
               </div>
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>Initial Status</label>
-                <select
-                  className="input"
-                  style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: '#fff', padding: 8 }}
-                  value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                >
-                  <option value="active">Active</option>
-                  <option value="proposed">Proposed</option>
-                  <option value="archived">Archived</option>
-                </select>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <div className="modal-footer">
                 <button type="button" className="btn btn-outline" onClick={() => setShowModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Save Node</button>
+                <button type="submit" className="btn btn-primary">Create area</button>
               </div>
             </form>
           </div>

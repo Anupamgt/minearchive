@@ -3,31 +3,60 @@
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  background: var(--bg);
+  padding: 24px;
+  background:
+    radial-gradient(1200px 600px at 50% -10%, var(--accent-subtle), transparent 60%),
+    var(--bg);
 }
 
 .login-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 0px;
-  padding: 32px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 36px;
   width: 100%;
-  max-width: 360px;
+  max-width: 400px;
+}
+
+.login-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 26px;
+}
+
+.login-logo-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--accent);
+  color: #ffffff;
+  box-shadow: var(--shadow-md);
+  margin-bottom: 14px;
+}
+
+.login-logo-mark svg {
+  display: block;
 }
 
 .login-logo {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 700;
-  color: #ffffff;
+  letter-spacing: -0.01em;
+  color: var(--text);
   text-align: center;
   margin-bottom: 4px;
 }
 
 .login-subtitle {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
   text-align: center;
-  margin-bottom: 28px;
+  line-height: 1.5;
 }
 
 .google-btn {
@@ -36,30 +65,35 @@
   justify-content: center;
   gap: 10px;
   width: 100%;
-  padding: 9px 16px;
-  background: #ffffff;
-  color: #1f1f1f;
-  border: 1px solid var(--border);
-  border-radius: 0px;
-  font-size: 13px;
+  padding: 10px 16px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  font-size: 14px;
   font-weight: 600;
   text-decoration: none;
   cursor: pointer;
-  transition: background-color 0.15s ease;
-  margin-bottom: 18px;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+  margin-bottom: 20px;
 }
 
 .google-btn:hover {
-  background: #f3f3f3;
+  background: var(--surface2);
+  text-decoration: none;
+}
+
+.google-btn:focus-visible {
+  box-shadow: var(--focus-ring);
 }
 
 .login-divider {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 18px;
+  margin-bottom: 20px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .login-divider::before,
@@ -73,58 +107,66 @@
 .login-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
 .login-field label {
   display: block;
-  font-size: 12px;
-  color: var(--muted);
-  margin-bottom: 4px;
-  font-weight: 500;
-}
-
-.login-field input {
-  width: 100%;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 0px;
-  color: var(--text);
-  padding: 8px 10px;
   font-size: 13px;
-  outline: none;
-  transition: border-color 0.15s ease;
-}
-
-.login-field input:focus {
-  border-color: var(--accent);
-}
-
-.login-field input::placeholder {
-  color: var(--muted);
+  color: var(--text);
+  margin-bottom: 6px;
+  font-weight: 600;
 }
 
 .login-btn {
   width: 100%;
-  padding: 9px 16px;
+  padding: 11px 16px;
   background: var(--accent);
   color: #ffffff;
-  border: none;
-  border-radius: 0px;
-  font-size: 13px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.15s ease;
-  margin-top: 4px;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+  margin-top: 2px;
 }
 
-.login-btn:hover {
-  background: #005fa3;
+.login-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.login-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.login-btn:focus-visible {
+  box-shadow: var(--focus-ring);
 }
 
 .login-footer {
-  text-align: center;
-  margin-top: 20px;
-  font-size: 11px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 22px;
+  padding: 12px 14px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-subtle);
+}
+
+.login-footer svg {
+  flex-shrink: 0;
+  margin-top: 2px;
   color: var(--muted);
+}
+
+.login-footer strong {
+  color: var(--text);
+  font-weight: 700;
 }

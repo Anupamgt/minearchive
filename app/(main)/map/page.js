@@ -11,7 +11,8 @@ const MapWithNoSSR = dynamic(() => import('../../components/LeafletMap'), {
   ssr: false,
   loading: () => (
     <div className="map-placeholder">
-      <div style={{ fontSize: 14, color: 'var(--text)' }}>Loading OpenStreetMap & Leaflet Tiles...</div>
+      <div className="map-placeholder-spinner" />
+      <div>Loading basemap…</div>
     </div>
   ),
 });
@@ -20,7 +21,6 @@ export default function MapPage() {
   const { showToast } = useToast();
   const [nodes, setNodes] = useState([]);
   const [selectedNode, setSelectedNode] = useState(null);
-  const [activeTab, setActiveTab] = useState('timeline');
   const [uploads, setUploads] = useState([]);
   const [shownUploads, setShownUploads] = useState(() => new Set());
   const [loadingUploads, setLoadingUploads] = useState(false);
@@ -107,10 +107,8 @@ export default function MapPage() {
       const next = new Set(prev);
       if (next.has(uploadId)) {
         next.delete(uploadId);
-        showToast('Hidden KML layer', 'info');
       } else {
         next.add(uploadId);
-        showToast('Showing KML polygon layer on map', 'success');
       }
       return next;
     });
@@ -118,16 +116,16 @@ export default function MapPage() {
 
   const showAll = () => {
     setShownUploads(new Set(uploads.map((u) => u.id)));
-    showToast(`Showing all ${uploads.length} KML entries`, 'success');
+    showToast(`Showing all ${uploads.length} boundary layers`, 'success');
   };
 
   const hideAll = () => {
     setShownUploads(new Set());
-    showToast('Cleared KML overlays', 'info');
+    showToast('Hid all boundary layers', 'info');
   };
 
   const activeNodeObj = nodes.find((n) => n.id === selectedNode);
-  const nodeName = activeNodeObj?.name || 'Mining Enclosure';
+  const nodeName = activeNodeObj?.name || 'Monitoring area';
 
   const uploadColorIndex = useMemo(() => {
     const map = new Map();
@@ -156,7 +154,7 @@ export default function MapPage() {
       .filter(Boolean);
   }, [kmlFeatures, uploadColorIndex]);
 
-  // Build light node outlines from any known geometries for that node (latest layer API without filter)
+  // Build light node outlines from any known geometries (all nodes)
   const [nodeOutlines, setNodeOutlines] = useState([]);
   useEffect(() => {
     if (nodes.length === 0) {
@@ -180,266 +178,222 @@ export default function MapPage() {
             positions,
           });
         }
-        // Nodes with no geometry yet get no outline (still selectable via list)
         setNodeOutlines(Array.from(byNode.values()));
       })
       .catch(() => setNodeOutlines([]));
   }, [nodes]);
 
+  // Legend reflects the layers currently drawn on the map.
+  const legendItems = useMemo(() => {
+    return kmlLayers.map((layer) => ({
+      id: layer.id,
+      color: layer.color,
+      label: layer.label,
+    }));
+  }, [kmlLayers]);
+
   const confirmFlagBreach = (e) => {
     e.preventDefault();
     setBreachModal(false);
     showToast(
-      `ENCROACHMENT BREACH FLAGGED for ${nodeName}. Violation notice logged to Central Audit Trail.`,
+      `Encroachment breach flagged for ${nodeName}. A violation notice was recorded in the audit trail.`,
       'error'
     );
   };
 
   return (
-    <div className="map-container">
-      <div className="map-area">
+    <div className="gis-shell">
+      {/* Map canvas */}
+      <div className="gis-map">
         <MapWithNoSSR
           selectedNode={selectedNode}
           onSelectNode={(id) => {
             setSelectedNode(id);
-            showToast(`Selected enclosure`, 'info');
+            const n = nodes.find((x) => x.id === id);
+            showToast(`Opened ${n?.name || 'monitoring area'}`, 'info');
           }}
           nodeOutlines={nodeOutlines}
           kmlLayers={kmlLayers}
         />
-        <div className="map-node-buttons">
-          {nodes.length === 0 ? (
-            <span style={{ fontSize: 12, color: 'var(--muted)' }}>
-              No nodes yet — create one under Nodes or upload a KML linked to a node.
+
+        {!selectedNode && (
+          <div className="map-hint-card">
+            <strong>Pick a monitoring area to begin</strong>
+            <span>
+              Choose an area from the Layers panel, or click any highlighted boundary on the map.
             </span>
-          ) : (
-            nodes.map((n) => (
-              <button
-                key={n.id}
-                className={`map-node-btn${selectedNode === n.id ? ' selected' : ''}`}
-                onClick={() => {
-                  setSelectedNode(n.id);
-                  showToast(`Focused on ${n.name}`, 'info');
-                }}
-              >
-                {n.name}
-                {typeof n.uploadCount === 'number' ? ` (${n.uploadCount})` : ''}
-              </button>
-            ))
-          )}
-        </div>
+          </div>
+        )}
+
+        {legendItems.length > 0 && (
+          <div className="map-legend" role="region" aria-label="Legend">
+            <div className="map-legend-title">Legend</div>
+            {legendItems.map((item) => (
+              <div className="map-legend-row" key={item.id}>
+                <span className="map-legend-swatch" style={{ background: item.color }} />
+                <span className="map-legend-label">{item.label}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      <div className="side-panel">
+      {/* Layers panel — GIS "Table of Contents" */}
+      <aside className="gis-panel">
+        <div className="gis-panel-head">
+          <div className="gis-panel-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polygon points="12 2 2 7 12 12 22 7 12 2" />
+              <polyline points="2 17 12 22 22 17" />
+              <polyline points="2 12 12 17 22 12" />
+            </svg>
+            Layers
+          </div>
+          <p className="gis-panel-desc">Monitoring areas and their uploaded boundary files.</p>
+        </div>
+
+        <div className="gis-field">
+          <label htmlFor="area-picker">Monitoring area</label>
+          <select
+            id="area-picker"
+            value={selectedNode || ''}
+            onChange={(e) => setSelectedNode(e.target.value || null)}
+          >
+            <option value="">Select an area…</option>
+            {nodes.map((n) => (
+              <option key={n.id} value={n.id}>
+                {n.name}
+                {typeof n.uploadCount === 'number' ? ` — ${n.uploadCount} file(s)` : ''}
+              </option>
+            ))}
+          </select>
+          {nodes.length === 0 && (
+            <p className="help-text">
+              No areas yet. Create one under “Areas”, then upload a KML/KMZ boundary.
+            </p>
+          )}
+        </div>
+
         {!selectedNode ? (
-          <div className="side-panel-empty">
-            <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 6 }}>
-              No Mining Enclosure Selected
-            </div>
-            <div>
-              Select a node below the map to open its KML archive. Multiple uploads can be shown on the map at once.
-            </div>
+          <div className="gis-empty">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4m0 13V4m0 0L9 7" />
+            </svg>
+            <h3>No area selected</h3>
+            <p>Select a monitoring area above to view and toggle its boundary layers on the map.</p>
           </div>
         ) : (
           <>
-            <div className="side-panel-header">
-              <div className="side-panel-title">
-                {nodeName.toUpperCase()}
-                <span className="tag tag-green">{activeNodeObj?.status || 'active'}</span>
+            <div className="gis-area-head">
+              <div className="gis-area-name" title={nodeName}>{nodeName}</div>
+              <span className={`tag ${(activeNodeObj?.status || 'active').toLowerCase() === 'active' ? 'tag-green' : 'tag'}`}>
+                {(activeNodeObj?.status || 'active').toUpperCase()}
+              </span>
+            </div>
+
+            <div className="gis-layers-toolbar">
+              <span className="gis-layers-count">
+                {shownUploads.size}/{uploads.length} visible
+              </span>
+              <div className="gis-layers-actions">
+                <button type="button" className="btn btn-outline btn-sm" onClick={showAll} disabled={uploads.length === 0}>
+                  Show all
+                </button>
+                <button type="button" className="btn btn-outline btn-sm" onClick={hideAll} disabled={shownUploads.size === 0}>
+                  Hide all
+                </button>
               </div>
             </div>
 
-            <div className="side-panel-tabs">
-              <button
-                className={`side-panel-tab${activeTab === 'timeline' ? ' active' : ''}`}
-                onClick={() => setActiveTab('timeline')}
-              >
-                Timeline
-              </button>
-              <button
-                className={`side-panel-tab${activeTab === 'table' ? ' active' : ''}`}
-                onClick={() => setActiveTab('table')}
-              >
-                Table
-              </button>
-            </div>
-
-            <div className="side-panel-body">
+            <div className="gis-layers">
               {loadingUploads ? (
-                <div style={{ padding: 20, textAlign: 'center', color: 'var(--muted)', fontSize: 12 }}>
-                  Fetching spatial archive...
+                <div className="gis-loading">
+                  <div className="skeleton" style={{ height: 46, marginBottom: 8 }} />
+                  <div className="skeleton" style={{ height: 46, marginBottom: 8 }} />
+                  <div className="skeleton" style={{ height: 46 }} />
                 </div>
               ) : uploads.length === 0 ? (
-                <div style={{ padding: 20, color: 'var(--muted)', fontSize: 12 }}>
-                  No KML uploads for this node yet. Use Upload KML to add one or more files.
+                <div className="gis-empty gis-empty-sm">
+                  <p>No boundary files uploaded for this area yet.</p>
+                  <a className="btn btn-primary btn-sm" href="/upload">Upload a KML / KMZ</a>
                 </div>
-              ) : activeTab === 'timeline' ? (
-                <>
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                    <button type="button" className="btn btn-outline" style={{ fontSize: 11, padding: '4px 8px' }} onClick={showAll}>
-                      Show all ({uploads.length})
-                    </button>
-                    <button type="button" className="btn btn-outline" style={{ fontSize: 11, padding: '4px 8px' }} onClick={hideAll}>
-                      Hide all
-                    </button>
-                  </div>
-                  {uploads.map((u, index) => (
-                    <div className="timeline-entry" key={u.id}>
-                      <div
-                        style={{
-                          width: 10,
-                          height: 10,
-                          borderRadius: 2,
-                          background: colorForIndex(index),
-                          marginTop: 4,
-                          flexShrink: 0,
-                        }}
-                      />
-                      <div className="timeline-info" style={{ flex: 1 }}>
-                        <div>
-                          <span className="timeline-date">
-                            {typeof u.uploadDate === 'string' ? u.uploadDate.split('T')[0] : '—'}
-                          </span>
-                          <span style={{ marginLeft: 8, color: 'var(--muted)', fontSize: 11 }}>
-                            {u.kmlFilePath || 'KML'} · {u.geometryCount ?? 0} poly
-                          </span>
-                        </div>
-                        <div className="timeline-category">{u.category}</div>
-                        <div className="timeline-user">Uploaded by: {u.uploadedBy || '—'}</div>
-                      </div>
-                      <button
-                        className={`timeline-show${shownUploads.has(u.id) ? ' active' : ''}`}
-                        onClick={() => toggleShow(u.id)}
-                      >
-                        {shownUploads.has(u.id) ? '✓ Shown' : 'Show'}
-                      </button>
-                    </div>
-                  ))}
-                </>
               ) : (
-                <table className="table table-compact" style={{ fontSize: 12 }}>
-                  <thead>
-                    <tr>
-                      <th></th>
-                      <th>Date</th>
-                      <th>File</th>
-                      <th>Polys</th>
-                      <th>User</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {uploads.map((u, index) => (
-                      <tr key={u.id}>
-                        <td>
-                          <span
-                            style={{
-                              display: 'inline-block',
-                              width: 10,
-                              height: 10,
-                              background: colorForIndex(index),
-                            }}
-                          />
-                        </td>
-                        <td>
+                uploads.map((u, index) => {
+                  const on = shownUploads.has(u.id);
+                  return (
+                    <label className={`layer-row${on ? ' on' : ''}`} key={u.id}>
+                      <input
+                        type="checkbox"
+                        className="layer-check"
+                        checked={on}
+                        onChange={() => toggleShow(u.id)}
+                      />
+                      <span className="layer-swatch" style={{ background: colorForIndex(index) }} />
+                      <span className="layer-info">
+                        <span className="layer-name" title={u.kmlFilePath || 'Boundary layer'}>
+                          {u.kmlFilePath || 'Boundary layer'}
+                        </span>
+                        <span className="layer-meta">
                           {typeof u.uploadDate === 'string' ? u.uploadDate.split('T')[0] : '—'}
-                        </td>
-                        <td>{u.kmlFilePath || u.category}</td>
-                        <td>{u.geometryCount ?? 0}</td>
-                        <td style={{ color: 'var(--muted)' }}>{u.uploadedBy || '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                          {' · '}
+                          {u.geometryCount ?? 0} polygon(s)
+                          {u.uploadedBy ? ` · ${u.uploadedBy}` : ''}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })
               )}
             </div>
 
-            <div className="change-metrics">
-              <div className="change-metrics-title">
-                Visible layers: {shownUploads.size} / {uploads.length}
-              </div>
-              <div className="change-metrics-row">
-                <div>
-                  <span className="metric-label">Polygons on map: </span>
-                  <span className="metric-value">{kmlLayers.length}</span>
-                </div>
+            <div className="gis-panel-footer">
+              <div className="gis-stat">
+                <span className="gis-stat-label">Polygons on map</span>
+                <span className="gis-stat-value">{kmlLayers.length}</span>
               </div>
               {isAdmin && (
                 <button
                   type="button"
+                  className="btn btn-danger w-full"
                   onClick={() => setBreachModal(true)}
-                  style={{
-                    width: '100%',
-                    marginTop: 12,
-                    background: 'var(--red)',
-                    color: '#fff',
-                    border: 'none',
-                    padding: '10px 14px',
-                    fontSize: 12,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                  }}
                 >
-                  Flag Encroachment Breach
+                  Flag encroachment breach
                 </button>
               )}
             </div>
           </>
         )}
-      </div>
+      </aside>
 
       {breachModal && (
-        <div
-          className="modal-overlay"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.7)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-          }}
-        >
-          <div
-            className="modal-card"
-            style={{ background: 'var(--surface)', border: '1px solid var(--red)', padding: 24, width: 440 }}
-          >
-            <h3 style={{ marginTop: 0, marginBottom: 12, color: 'var(--red)' }}>
-              Flag Encroachment Violation
-            </h3>
-            <p style={{ fontSize: 13, color: 'var(--text)', marginBottom: 16 }}>
-              Formal notice for <strong>{nodeName}</strong> will be recorded in the audit trail.
-            </p>
+        <div className="modal-overlay" onClick={() => setBreachModal(false)}>
+          <div className="modal" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 style={{ color: 'var(--red)' }}>Flag encroachment violation</h3>
+              <button type="button" className="modal-close" aria-label="Close" onClick={() => setBreachModal(false)}>×</button>
+            </div>
             <form onSubmit={confirmFlagBreach}>
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>
-                  Findings / Evidence Details
-                </label>
-                <textarea
-                  className="input"
-                  rows="3"
-                  style={{
-                    width: '100%',
-                    background: 'var(--bg)',
-                    border: '1px solid var(--border)',
-                    color: '#fff',
-                    padding: 8,
-                  }}
-                  value={breachReason}
-                  onChange={(e) => setBreachReason(e.target.value)}
-                  required
-                />
+              <div className="modal-body">
+                <p style={{ fontSize: 14, color: 'var(--text-subtle)', marginBottom: 16 }}>
+                  A formal notice for <strong style={{ color: 'var(--text)' }}>{nodeName}</strong> will be recorded in the audit trail.
+                </p>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label htmlFor="breach-reason" className="required">Findings / evidence</label>
+                  <textarea
+                    id="breach-reason"
+                    rows="3"
+                    value={breachReason}
+                    onChange={(e) => setBreachReason(e.target.value)}
+                    required
+                  />
+                </div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <div className="modal-footer">
                 <button type="button" className="btn btn-outline" onClick={() => setBreachModal(false)}>
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="btn"
-                  style={{ background: 'var(--red)', color: '#fff', fontWeight: 700, padding: '8px 16px' }}
-                >
-                  Confirm Breach Notice
+                <button type="submit" className="btn btn-danger">
+                  Record breach notice
                 </button>
               </div>
             </form>
