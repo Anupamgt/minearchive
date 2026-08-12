@@ -16,6 +16,7 @@ export default function NodesPage() {
   const [nodes, setNodes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [formData, setFormData] = useState({ name: '', status: 'active', locationLabel: 'Ropar District' });
 
@@ -67,40 +68,54 @@ export default function NodesPage() {
       });
   };
 
-  const updateNodeStatus = async (node, nextStatus) => {
+  const patchNode = async (node, patch, successMessage, tone = 'success') => {
     setBusyId(node.id);
     try {
       const res = await fetch(`/api/nodes/${encodeURIComponent(node.id)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ status: nextStatus }),
+        body: JSON.stringify(patch),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data.error || 'Status update failed');
+        throw new Error(data.error || 'Update failed');
       }
 
-      setNodes((prev) =>
-        prev.map((n) =>
-          n.id === node.id
-            ? { ...n, status: data.status || nextStatus, updatedAt: data.updatedAt || n.updatedAt }
-            : n
-        )
-      );
-
-      if (nextStatus === 'archived') {
-        showToast(`Archived monitoring area: ${node.name}`, 'warning');
-      } else if (nextStatus === 'active') {
-        showToast(`Restored monitoring area: ${node.name}`, 'success');
-      } else {
-        showToast(`Updated ${node.name} → ${nextStatus}`, 'info');
-      }
+      setNodes((prev) => prev.map((n) => (n.id === node.id ? { ...n, ...data } : n)));
+      showToast(successMessage, tone);
+      return true;
     } catch (err) {
-      showToast(err.message || 'Could not update area status', 'error');
+      showToast(err.message || 'Could not update monitoring area', 'error');
+      return false;
     } finally {
       setBusyId(null);
     }
+  };
+
+  const updateNodeStatus = (node, nextStatus) => {
+    const message =
+      nextStatus === 'archived'
+        ? `Archived monitoring area: ${node.name}`
+        : nextStatus === 'active'
+          ? `Restored monitoring area: ${node.name}`
+          : `Updated ${node.name} → ${nextStatus}`;
+    return patchNode(node, { status: nextStatus }, message, nextStatus === 'archived' ? 'warning' : 'success');
+  };
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    if (!editing) return;
+    if (!editing.name.trim()) {
+      showToast('Area name cannot be empty.', 'warning');
+      return;
+    }
+    const ok = await patchNode(
+      editing,
+      { name: editing.name.trim(), status: editing.status },
+      `Updated ${editing.name.trim()}`
+    );
+    if (ok) setEditing(null);
   };
 
   const handleArchive = (node) => {
@@ -192,6 +207,19 @@ export default function NodesPage() {
                     </td>
                     <td>
                       <div className="nodes-actions">
+                        <button
+                          className="btn btn-outline btn-sm"
+                          disabled={isBusy}
+                          onClick={() =>
+                            setEditing({
+                              id: n.id,
+                              name: n.name,
+                              status: (n.status || 'active').toLowerCase(),
+                            })
+                          }
+                        >
+                          Edit
+                        </button>
                         {isArchived ? (
                           <button
                             className="btn btn-outline btn-sm"
@@ -270,6 +298,59 @@ export default function NodesPage() {
                 </button>
                 <button type="submit" className="btn btn-primary">
                   Create area
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {editing && (
+        <div className="modal-overlay" onClick={() => setEditing(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Edit monitoring area</h3>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setEditing(null)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <form onSubmit={handleSaveEdit}>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label className="required" htmlFor="edit-node-name">
+                    Area name
+                  </label>
+                  <input
+                    id="edit-node-name"
+                    type="text"
+                    value={editing.name}
+                    onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="edit-node-status">Status</label>
+                  <select
+                    id="edit-node-status"
+                    value={editing.status}
+                    onChange={(e) => setEditing({ ...editing, status: e.target.value })}
+                  >
+                    <option value="active">Active</option>
+                    <option value="proposed">Proposed</option>
+                    <option value="archived">Archived</option>
+                  </select>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-outline" onClick={() => setEditing(null)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={busyId === editing.id}>
+                  {busyId === editing.id ? 'Saving…' : 'Save changes'}
                 </button>
               </div>
             </form>

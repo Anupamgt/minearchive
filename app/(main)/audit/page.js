@@ -1,14 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useToast } from '../../components/ToastProvider';
 import './audit.css';
 
 function ActionTag({ action }) {
   const a = (action || '').toLowerCase();
   let cls = '';
-  if (a.includes('upload')) cls = 'tag-green';
-  else if (a.includes('archive')) cls = 'tag-yellow';
+  if (a.includes('breach')) cls = 'tag-red';
+  else if (a.includes('upload')) cls = 'tag-green';
+  else if (a.includes('archive') || a.includes('disable')) cls = 'tag-yellow';
   else if (a.includes('login')) cls = 'tag-accent';
   return <span className={`tag ${cls}`}>{action}</span>;
 }
@@ -22,38 +23,37 @@ export default function AuditPage() {
   const [filterUser, setFilterUser] = useState('All Users');
 
   useEffect(() => {
-    fetch('/api/audit?limit=100')
+    fetch('/api/audit?limit=200', { credentials: 'same-origin' })
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
-          setLogs(data);
-        } else {
-          setLogs([
-            { id: 1, timestamp: '2026-06-15 14:32', userName: 'Harpreet Singh', action: 'Upload KML', targetType: 'Ropar North Quarry', details: 'Routine Survey #5' },
-            { id: 2, timestamp: '2026-06-15 10:15', userName: 'Admin', action: 'Archive Node', targetType: 'Sutlej River Pit', details: 'Archived old sector' },
-            { id: 3, timestamp: '2026-06-14 09:00', userName: 'System', action: 'Area Change', targetType: 'Nangal Road Site', details: '+8.2% expansion detected' },
-            { id: 4, timestamp: '2026-06-13 16:45', userName: 'Amit Sharma', action: 'Upload KML', targetType: 'Kiratpur Quarry', details: 'Encroachment report' },
-            { id: 5, timestamp: '2026-06-13 11:20', userName: 'Harpreet Singh', action: 'Login', targetType: '—', details: 'Successful login' },
-          ]);
-        }
+        setLogs(Array.isArray(data) ? data : []);
         setLoading(false);
       })
       .catch(() => {
-        setLogs([
-          { id: 1, timestamp: '2026-06-15 14:32', userName: 'Harpreet Singh', action: 'Upload KML', targetType: 'Ropar North Quarry', details: 'Routine Survey #5' },
-          { id: 2, timestamp: '2026-06-15 10:15', userName: 'Admin', action: 'Archive Node', targetType: 'Sutlej River Pit', details: 'Archived old sector' },
-          { id: 3, timestamp: '2026-06-14 09:00', userName: 'System', action: 'Area Change', targetType: 'Nangal Road Site', details: '+8.2% expansion detected' },
-          { id: 4, timestamp: '2026-06-13 16:45', userName: 'Amit Sharma', action: 'Upload KML', targetType: 'Kiratpur Quarry', details: 'Encroachment report' },
-          { id: 5, timestamp: '2026-06-13 11:20', userName: 'Harpreet Singh', action: 'Login', targetType: '—', details: 'Successful login' },
-        ]);
+        setLogs([]);
         setLoading(false);
+        showToast('Could not load the activity log.', 'error');
       });
-  }, []);
+  }, [showToast]);
+
+  const actionOptions = useMemo(
+    () => Array.from(new Set(logs.map((l) => l.action).filter(Boolean))).sort(),
+    [logs]
+  );
+  const userOptions = useMemo(
+    () => Array.from(new Set(logs.map((l) => l.userName).filter(Boolean))).sort(),
+    [logs]
+  );
 
   const filteredLogs = logs.filter((l) => {
-    const matchSearch = searchTerm === '' || l.details?.toLowerCase().includes(searchTerm.toLowerCase()) || l.userName?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchAction = filterAction === 'All Actions' || l.action?.toLowerCase() === filterAction.toLowerCase();
-    const matchUser = filterUser === 'All Users' || l.userName?.toLowerCase() === filterUser.toLowerCase();
+    const term = searchTerm.toLowerCase();
+    const matchSearch =
+      term === '' ||
+      l.details?.toLowerCase().includes(term) ||
+      l.userName?.toLowerCase().includes(term) ||
+      l.action?.toLowerCase().includes(term);
+    const matchAction = filterAction === 'All Actions' || l.action === filterAction;
+    const matchUser = filterUser === 'All Users' || l.userName === filterUser;
     return matchSearch && matchAction && matchUser;
   });
 
@@ -66,7 +66,7 @@ export default function AuditPage() {
     const headers = ['ID', 'Timestamp', 'User', 'Action', 'Monitoring Area', 'Details'];
     const rows = filteredLogs.map((l) => [
       l.id,
-      typeof l.timestamp === 'string' ? l.timestamp : '2026-06-15 14:32',
+      l.timestamp ? String(l.timestamp).replace('T', ' ').substring(0, 16) : '',
       l.userName,
       l.action,
       l.targetType || l.targetId || '—',
@@ -105,18 +105,22 @@ export default function AuditPage() {
             <label htmlFor="audit-action">Action</label>
             <select id="audit-action" className="input" value={filterAction} onChange={(e) => setFilterAction(e.target.value)}>
               <option>All Actions</option>
-              <option value="Upload KML">Upload KML</option>
-              <option value="Archive Node">Archive Node</option>
-              <option value="Login">Login</option>
+              {actionOptions.map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                </option>
+              ))}
             </select>
           </div>
           <div className="audit-field">
             <label htmlFor="audit-user">User</label>
             <select id="audit-user" className="input" value={filterUser} onChange={(e) => setFilterUser(e.target.value)}>
               <option>All Users</option>
-              <option value="Harpreet Singh">Harpreet Singh</option>
-              <option value="Amit Sharma">Amit Sharma</option>
-              <option value="Admin">Admin</option>
+              {userOptions.map((u) => (
+                <option key={u} value={u}>
+                  {u}
+                </option>
+              ))}
             </select>
           </div>
           <div className="audit-field audit-field-search">
@@ -174,7 +178,7 @@ export default function AuditPage() {
               {filteredLogs.map((l) => (
                 <tr key={l.id}>
                   <td style={{ color: 'var(--muted)', whiteSpace: 'nowrap' }}>
-                    {typeof l.timestamp === 'string' ? l.timestamp.replace('T', ' ').substring(0, 16) : '2026-06-15 14:32'}
+                    {l.timestamp ? String(l.timestamp).replace('T', ' ').substring(0, 16) : '—'}
                   </td>
                   <td style={{ fontWeight: 600, color: l.userName === 'Admin' ? 'var(--accent)' : 'var(--text)' }}>
                     {l.userName}
