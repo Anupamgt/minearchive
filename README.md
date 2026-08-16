@@ -13,16 +13,20 @@ A web-based application for monitoring changes in mining areas through KML bound
 - **PDF Reports** — Per-node history export for external stakeholders
 - **Role-Based Access** — Central Administrator (full access) and Field Users (upload + view)
 
-## Tech Stack
+## Architecture
+
+See **[docs/system-design.md](docs/system-design.md)** for the container diagram,
+auth flow, KML ingestion pipeline, data model, and deployment topology.
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | Next.js (App Router) + Vanilla CSS |
-| Map | ArcGIS JavaScript SDK / Leaflet.js |
-| Backend | Next.js API Routes |
-| Database | PostgreSQL + PostGIS (local Docker or **Supabase**) |
-| File Storage | Cloud Object Storage (S3/GCS) |
-| Auth | Google OAuth + email/password session cookie |
+| Frontend | Next.js 16 (App Router) + Vanilla CSS |
+| Map | Leaflet.js via react-leaflet, OpenStreetMap tiles |
+| Backend | Next.js Route Handlers |
+| Database | PostgreSQL + PostGIS (Supabase, or local Docker) |
+| ORM | Prisma, with raw SQL for PostGIS geometry |
+| Auth | Google OAuth + HMAC-signed session cookie |
+| Hosting | Vercel (Dockerfile provided for self-hosting) |
 
 ## Getting Started
 
