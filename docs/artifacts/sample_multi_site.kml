@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>IRODA PROVIDED_DATA_KEY-MINING SITES</name>
+    <description>
+      Test fixture for multi-site ingestion. Mirrors the shapes real survey
+      exports take: some placemarks name themselves with &lt;name&gt;, others
+      only via ExtendedData, one uses MultiGeometry, one has no name at all.
+    </description>
+
+    <Placemark>
+      <name>Ropar North Quarry — Block A</name>
+      <Polygon><outerBoundaryIs><LinearRing><coordinates>
+        76.520120,30.980450,0 76.540310,30.990120,0 76.545220,30.975340,0 76.530180,30.970110,0 76.520120,30.980450,0
+      </coordinates></LinearRing></outerBoundaryIs></Polygon>
+    </Placemark>
+
+    <Placemark>
+      <ExtendedData>
+        <SchemaData schemaUrl="#mining">
+          <SimpleData name="SITE_NAME">Sutlej Riverbed Lease 22</SimpleData>
+          <SimpleData name="LEASE_NO">PB/RPR/22</SimpleData>
+        </SchemaData>
+      </ExtendedData>
+      <Polygon><outerBoundaryIs><LinearRing><coordinates>
+        76.551000,30.961000,0 76.566000,30.969000,0 76.571000,30.957000,0 76.556000,30.951000,0 76.551000,30.961000,0
+      </coordinates></LinearRing></outerBoundaryIs></Polygon>
+    </Placemark>
+
+    <Placemark>
+      <ExtendedData>
+        <Data name="Name"><value>Nangal Road Stockpile</value></Data>
+        <Data name="operator"><value>PWD Contractor 4</value></Data>
+      </ExtendedData>
+      <Polygon><outerBoundaryIs><LinearRing><coordinates>
+        76.481000,31.011000,0 76.496000,31.019000,0 76.501000,31.007000,0 76.486000,31.001000,0 76.481000,31.011000,0
+      </coordinates></LinearRing></outerBoundaryIs></Polygon>
+    </Placemark>
+
+    <Placemark>
+      <name>Kiratpur Twin Pits</name>
+      <MultiGeometry>
+        <Polygon><outerBoundaryIs><LinearRing><coordinates>
+          76.601000,31.061000,0 76.611000,31.067000,0 76.615000,31.058000,0 76.605000,31.053000,0 76.601000,31.061000,0
+        </coordinates></LinearRing></outerBoundaryIs></Polygon>
+        <Polygon><outerBoundaryIs><LinearRing><coordinates>
+          76.621000,31.071000,0 76.631000,31.077000,0 76.635000,31.068000,0 76.625000,31.063000,0 76.621000,31.071000,0
+        </coordinates></LinearRing></outerBoundaryIs></Polygon>
+      </MultiGeometry>
+    </Placemark>
+
+    <Placemark>
+      <Polygon><outerBoundaryIs><LinearRing><coordinates>
+        76.451000,30.921000,0 76.461000,30.927000,0 76.465000,30.918000,0 76.455000,30.913000,0 76.451000,30.921000,0
+      </coordinates></LinearRing></outerBoundaryIs></Polygon>
+    </Placemark>
+  </Document>
+</kml>

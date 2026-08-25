@@ -74,6 +74,230 @@
 }
 
 /* Floating legend (bottom-left, ArcGIS-style) */
+.map-file-card {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 520;
+  width: min(360px, calc(100% - 32px));
+  max-height: calc(100% - 120px);
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  padding: 12px 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.map-file-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.map-file-card-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  margin-top: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+}
+.map-file-card-titles {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.map-file-card-titles strong {
+  font-size: 13.5px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.map-file-card-titles span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.map-file-card-close {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius);
+  color: var(--muted);
+  flex-shrink: 0;
+  font-size: 18px;
+  line-height: 1;
+}
+.map-file-card-close:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
+.map-file-card-meta {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 10px;
+  row-gap: 3px;
+  font-size: 12px;
+  margin: 0;
+}
+.map-file-card-meta dt {
+  color: var(--muted);
+  font-weight: 600;
+}
+.map-file-card-meta dd {
+  color: var(--text-subtle);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.map-file-card-notes {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-subtle);
+  line-height: 1.45;
+}
+.map-file-card-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  padding: 8px;
+  background: var(--surface2);
+  border-radius: var(--radius);
+}
+.map-file-card-stats div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.map-file-card-stats span {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.map-file-card-stats label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 2px 0 0;
+}
+.map-file-card-selected {
+  border: 1px solid var(--accent);
+  background: var(--accent-subtle);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+}
+.map-file-card-selected-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.map-file-card-selected-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text);
+  margin-top: 2px;
+}
+.map-file-card-selected-metrics {
+  font-size: 12px;
+  color: var(--text-subtle);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.map-file-card-attrs {
+  margin: 8px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.map-file-card-attrs div {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 8px;
+  font-size: 12px;
+}
+.map-file-card-attrs dt {
+  color: var(--muted);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.map-file-card-attrs dd {
+  margin: 0;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.map-file-card-sites-title {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.map-file-card-sites ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.map-file-site {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+}
+.map-file-site:hover {
+  background: var(--surface2);
+}
+.map-file-site.active {
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+}
+.map-file-site-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.map-file-site-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.map-file-site-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.map-file-site-meta {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Floating legend (bottom-left, ArcGIS-style) */
 .map-legend {
   position: absolute;
   bottom: 16px;
@@ -84,7 +308,7 @@
   border-radius: var(--radius);
   box-shadow: var(--shadow-md);
   padding: 10px 12px;
-  max-width: 260px;
+  max-width: 300px;
   max-height: 40%;
   overflow-y: auto;
 }
@@ -102,7 +326,17 @@
   gap: 8px;
   font-size: 12px;
   color: var(--text-subtle);
-  padding: 2px 0;
+  padding: 3px 4px;
+  width: 100%;
+  text-align: left;
+  border-radius: 4px;
+}
+.map-legend-row:hover {
+  background: var(--surface2);
+}
+.map-legend-row.active {
+  background: var(--accent-subtle);
+  color: var(--text);
 }
 .map-legend-swatch {
   width: 14px;
@@ -115,6 +349,22 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.map-legend-area {
+  margin-left: auto;
+  padding-left: 8px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.map-legend-note {
+  margin: 8px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--muted);
+  white-space: normal;
 }
 
 /* ---- Layers panel ---- */
@@ -218,6 +468,19 @@
 .layer-row.on {
   border-color: var(--accent);
   background: var(--accent-subtle);
+}
+.layer-row.selected {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.layer-select {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+  text-align: left;
+  background: transparent;
+  padding: 0;
 }
 .layer-check {
   width: 16px;

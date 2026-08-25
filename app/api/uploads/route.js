@@ -103,21 +103,34 @@ async function processOneKmlFile({ file, nodeId, category, surveyDate, notes, up
     // Force 2D — KML coordinates often include altitude (Z) which Polygon,4326 rejects.
     await prisma.$executeRawUnsafe(
       `
-      INSERT INTO "UploadGeometry" ("id", "uploadId", "geom", "areaHectares", "perimeterMeters")
+      INSERT INTO "UploadGeometry" (
+        "id", "uploadId", "geom", "name", "sourceProperties",
+        "partIndex", "partCount", "areaHectares", "perimeterMeters"
+      )
       VALUES (
         $1,
         $2,
         ST_Force2D(ST_SetSRID(ST_GeomFromGeoJSON($3), 4326)),
+        $4,
+        $5::jsonb,
+        $6,
+        $7,
         ST_Area(ST_Force2D(ST_SetSRID(ST_GeomFromGeoJSON($3), 4326))::geography) / 10000.0,
         ST_Perimeter(ST_Force2D(ST_SetSRID(ST_GeomFromGeoJSON($3), 4326))::geography)
       )
       `,
       id,
       upload.id,
-      geomJson
+      geomJson,
+      poly.name || null,
+      JSON.stringify(poly.properties || {}),
+      poly.partIndex ?? 0,
+      poly.partCount ?? 1
     );
     parsedFeatures++;
   }
+
+  const namedFeatures = polygons.filter((p) => p.name).length;
 
   await prisma.auditLog.create({
     data: {
@@ -135,6 +148,7 @@ async function processOneKmlFile({ file, nodeId, category, surveyDate, notes, up
     uploadId: upload.id,
     nodeId: resolvedNodeId,
     featuresDetected: parsedFeatures,
+    namedFeatures,
   };
 }
 

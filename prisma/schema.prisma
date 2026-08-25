@@ -63,10 +63,19 @@ model UploadGeometry {
   id              String   @id @default(uuid())
   uploadId        String
   upload          Upload   @relation(fields: [uploadId], references: [id])
-  
+
   // Storing geometry as Unsupported
   geom            Unsupported("geometry(Polygon, 4326)")?
-  
+
+  // Placemark name from the KML. Null when the source had no usable name.
+  name            String?
+  // Every other KML attribute (ExtendedData etc). Kept verbatim so the display
+  // name can be re-derived later without re-uploading the original file.
+  sourceProperties Json?
+  // Position within a placemark that produced several polygons (MultiGeometry).
+  partIndex       Int?
+  partCount       Int?
+
   areaHectares    Float?
   perimeterMeters Float?
 }

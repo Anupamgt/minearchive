@@ -47,6 +47,10 @@ export async function GET(request) {
         u."uploadDate",
         n.name AS "nodeName",
         ST_AsGeoJSON(ug.geom)::json AS geometry,
+        ug.name AS "siteName",
+        ug."sourceProperties",
+        ug."partIndex",
+        ug."partCount",
         ug."areaHectares",
         ug."perimeterMeters"
       FROM "UploadGeometry" ug
@@ -71,6 +75,12 @@ export async function GET(request) {
         kmlFilePath: row.kmlFilePath,
         uploadedBy: row.uploadedBy,
         uploadDate: row.uploadDate,
+        // Name of the individual site/placemark, distinct from the file it
+        // arrived in. Null for rows ingested before names were captured.
+        siteName: row.siteName,
+        sourceProperties: row.sourceProperties,
+        partIndex: row.partIndex,
+        partCount: row.partCount,
         areaHectares: row.areaHectares,
         perimeterMeters: row.perimeterMeters,
       },

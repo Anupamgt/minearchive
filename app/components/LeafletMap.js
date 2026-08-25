@@ -38,12 +38,18 @@ function FitBounds({ layers }) {
  * @param {(id: string) => void} props.onSelectNode
  * @param {Array<{ id: string, name: string, color?: string, positions: number[][][] }>} props.nodeOutlines
  * @param {Array<{ id: string, uploadId: string, label?: string, color?: string, positions: number[][][] }>} props.kmlLayers
+ * @param {string|null} props.selectedUploadId
+ * @param {string|null} props.selectedLayerId
+ * @param {(layer: object) => void} props.onSelectLayer
  */
 export default function LeafletMap({
   selectedNode,
   onSelectNode,
   nodeOutlines = [],
   kmlLayers = [],
+  selectedUploadId = null,
+  selectedLayerId = null,
+  onSelectLayer,
 }) {
   const overlayLayers = useMemo(() => {
     return (kmlLayers || []).map((layer, index) => ({
@@ -91,22 +97,38 @@ export default function LeafletMap({
         );
       })}
 
-      {overlayLayers.map((layer) => (
-        <Polygon
-          key={`kml-${layer.id}`}
-          positions={layer.positions}
-          pathOptions={{
-            color: layer.color,
-            weight: 3,
-            fillColor: layer.color,
-            fillOpacity: 0.35,
-          }}
-        >
-          <Tooltip direction="center" permanent={overlayLayers.length <= 3}>
-            {layer.label || layer.uploadId}
-          </Tooltip>
-        </Polygon>
-      ))}
+      {overlayLayers.map((layer) => {
+        const isSelectedSite = selectedLayerId && selectedLayerId === layer.id;
+        const isSelectedFile =
+          selectedUploadId && selectedUploadId === layer.uploadId;
+        const dimOthers = Boolean(selectedUploadId) && !isSelectedFile;
+
+        return (
+          <Polygon
+            key={`kml-${layer.id}`}
+            positions={layer.positions}
+            pathOptions={{
+              color: layer.color,
+              weight: isSelectedSite ? 4 : isSelectedFile ? 3 : dimOthers ? 1.5 : 2.5,
+              fillColor: layer.color,
+              fillOpacity: isSelectedSite
+                ? 0.55
+                : isSelectedFile
+                  ? 0.4
+                  : dimOthers
+                    ? 0.1
+                    : 0.32,
+            }}
+            eventHandlers={{
+              click: () => onSelectLayer?.(layer),
+            }}
+          >
+            <Tooltip direction="center" permanent={overlayLayers.length <= 3 && !selectedLayerId}>
+              {layer.label || layer.uploadId}
+            </Tooltip>
+          </Polygon>
+        );
+      })}
     </MapContainer>
   );
 }
