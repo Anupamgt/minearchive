@@ -4,6 +4,25 @@
 
 A web-based application for monitoring changes in mining areas through KML boundary file uploads, map visualization, and historical tracking.
 
+Current release: **[v1.0.0](CHANGELOG.md#100--2026-08-25)**. History from the MVP onward is tagged and listed in [CHANGELOG.md](CHANGELOG.md).
+
+```bash
+git checkout v0.1.0   # original MVP
+git checkout v0.4.0   # real multi-layer GIS
+git checkout v1.0.0   # site names + file inspect card
+```
+
+| Version | When | What landed |
+|---------|------|-------------|
+| [0.1.0](CHANGELOG.md#010--2026-06-19) | 2026-06-19 | MVP |
+| [0.2.0](CHANGELOG.md#020--2026-06-28) | 2026-06-28 | Backend, PostGIS, Leaflet map, first polish |
+| [0.3.0](CHANGELOG.md#030--2026-08-08) | 2026-08-08 | Google OAuth, Supabase, Vercel |
+| [0.4.0](CHANGELOG.md#040--2026-08-12) | 2026-08-12 | Real KML/KMZ geometries, multi-layer map |
+| [0.5.0](CHANGELOG.md#050--2026-08-12) | 2026-08-12 | Professional map-centric UI |
+| [0.6.0](CHANGELOG.md#060--2026-08-12) | 2026-08-12 | Archive, users, breach, and other actions persist |
+| [0.7.0](CHANGELOG.md#070--2026-08-16) | 2026-08-16 | System design docs |
+| [1.0.0](CHANGELOG.md#100--2026-08-25) | 2026-08-25 | Per-site names and file inspect card |
+
 ## Features
 
 - **KML Upload & Parsing** — Upload KML/KMZ files with multi-polygon support, auto-matching to existing mining nodes

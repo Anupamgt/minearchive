@@ -246,7 +246,7 @@ export default function MainLayout({ children }) {
 
           {!sidebarCollapsed && (
             <div className="sidebar-footer">
-              <span className="tag">MineArchive v1.0</span>
+              <span className="tag">MineArchive v1.0.0</span>
             </div>
           )}
         </nav>
