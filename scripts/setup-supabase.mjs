@@ -19,6 +19,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { PrismaClient } from '@prisma/client';
+import { lockPostgisCatalog } from './lock-postgis-catalog.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
@@ -90,6 +91,14 @@ try {
   const rows = await prisma.$queryRawUnsafe('SELECT PostGIS_Version() AS version;');
   const version = rows?.[0]?.version || 'unknown';
   console.log(`  PostGIS OK (${version})`);
+
+  console.log('→ Locking PostGIS catalog from the Data API…');
+  try {
+    await lockPostgisCatalog(prisma);
+    console.log('  spatial_ref_sys RLS enabled');
+  } catch (lockErr) {
+    console.warn(`  Catalog lock skipped: ${lockErr.message}`);
+  }
 } catch (err) {
   await prisma.$disconnect().catch(() => {});
   fail(

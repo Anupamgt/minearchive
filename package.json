@@ -11,6 +11,7 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:supabase": "node scripts/setup-supabase.mjs",
+    "db:lock-postgis": "node scripts/lock-postgis-catalog.mjs",
     "db:seed-demo": "node scripts/seed-demo-users.mjs",
     "db:seed-nodes": "node scripts/seed-mining-nodes.mjs",
     "docs:diagrams": "node scripts/render-diagrams.mjs"

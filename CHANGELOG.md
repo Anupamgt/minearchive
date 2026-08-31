@@ -8,6 +8,13 @@ milestone: `git checkout v0.4.0`.
 
 ---
 
+## [Unreleased]
+
+### Security
+- Enable RLS on PostGIS `spatial_ref_sys` and revoke `anon` / `authenticated` so Security Advisor no longer flags “RLS Disabled in Public”. Run `prisma/sql/01_lock_postgis_catalog.sql` in the SQL Editor (or `npm run db:lock-postgis`).
+
+---
+
 ## [1.0.0] — 2026-08-25
 
 **Site names and file inspect card.** Current production line.
