@@ -11,7 +11,7 @@ milestone: `git checkout v0.4.0`.
 ## [Unreleased]
 
 ### Security
-- Enable RLS on PostGIS `spatial_ref_sys` and revoke `anon` / `authenticated` so Security Advisor no longer flags “RLS Disabled in Public”. Run `prisma/sql/01_lock_postgis_catalog.sql` in the SQL Editor (or `npm run db:lock-postgis`).
+- PostGIS `spatial_ref_sys` is owned by `supabase_admin`, so hosted SQL Editor cannot `ENABLE ROW LEVEL SECURITY` (`must be owner of table`). That Security Advisor item is a false positive (EPSG catalog, no tenant data). Ignore it, or revoke `anon`/`authenticated` if the role allows. Do not move the PostGIS extension on a live database.
 
 ---
 

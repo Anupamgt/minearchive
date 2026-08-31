@@ -75,8 +75,8 @@ if (isMain) {
   try {
     console.log('→ Locking PostGIS catalog (spatial_ref_sys) from the Data API…');
     await lockPostgisCatalog(prisma);
-    console.log('✔ spatial_ref_sys RLS enabled; anon/authenticated revoked.');
-    console.log('  Refresh Security Advisor in the Supabase dashboard to confirm.');
+    console.log('✔ PostGIS catalog lock attempted (see notices).');
+    console.log('  On hosted Supabase, ENABLE RLS is skipped — that warning is a false positive.');
   } catch (err) {
     console.error(`✖ ${err.message}`);
     process.exit(1);

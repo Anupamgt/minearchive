@@ -78,13 +78,9 @@ Google OAuth redirect URI must be:
 npm run db:supabase
 ```
 
-That enables PostGIS, locks `spatial_ref_sys` away from the Data API (clears the “RLS Disabled in Public” advisor warning), pushes the Prisma schema, and creates a GIST index on `UploadGeometry.geom`.
+That enables PostGIS, pushes the Prisma schema, and creates a GIST index on `UploadGeometry.geom`.
 
-To apply only the catalog lock on an existing project, paste `prisma/sql/01_lock_postgis_catalog.sql` into **SQL Editor → Run**, or:
-
-```bash
-npm run db:lock-postgis
-```
+Hosted Supabase Security Advisor may flag `public.spatial_ref_sys` as “RLS Disabled in Public”. That table is the PostGIS EPSG catalog, owned by `supabase_admin`, so you **cannot** enable RLS from the SQL Editor. It is safe to ignore. If you want to try locking the Data API anyway, run `prisma/sql/01_lock_postgis_catalog.sql` (it skips `ENABLE RLS` when you are not the owner).
 
 Smoke test: `GET /api/health?deep=1` should return `"database":"ok"`.
 
