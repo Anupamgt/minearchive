@@ -21,12 +21,14 @@ export default function Sidebar() {
     { label: 'Dashboard', href: '/dashboard' },
     { label: 'Map View', href: '/map' },
     { label: 'Upload KML', href: '/upload' },
-    { label: 'Audit Log', href: '/audit' },
   ];
 
   if (isAdmin) {
-    NAV_ITEMS.splice(3, 0, { label: 'Nodes', href: '/nodes' });
-    NAV_ITEMS.splice(4, 0, { label: 'Users', href: '/users' });
+    NAV_ITEMS.push(
+      { label: 'Nodes', href: '/nodes' },
+      { label: 'Audit Log', href: '/audit' },
+      { label: 'Users', href: '/users' }
+    );
   }
 
   return (

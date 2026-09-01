@@ -118,12 +118,12 @@ const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: ICONS.dashboard },
   { href: '/map', label: 'Map', icon: ICONS.map },
   { href: '/upload', label: 'Upload Boundary', icon: ICONS.upload },
-  { href: '/nodes', label: 'Monitoring Areas', icon: ICONS.nodes },
-  { href: '/audit', label: 'Activity Log', icon: ICONS.audit },
-  { href: '/users', label: 'Users', icon: ICONS.users },
+  { href: '/nodes', label: 'Monitoring Areas', icon: ICONS.nodes, adminOnly: true },
+  { href: '/audit', label: 'Activity Log', icon: ICONS.audit, adminOnly: true },
+  { href: '/users', label: 'Users', icon: ICONS.users, adminOnly: true },
 ];
 
-const FALLBACK_USER = { name: 'Central Admin', role: 'admin' };
+const FALLBACK_USER = { name: '', role: '' };
 
 function getInitials(name) {
   if (!name) return '?';
@@ -152,7 +152,9 @@ export default function MainLayout({ children }) {
     router.push('/login');
   };
 
-  const roleTagClass = user.role === 'admin' ? 'tag tag-accent' : 'tag tag-green';
+  const isAdmin = (user.role || '').toLowerCase() === 'admin';
+  const roleTagClass = isAdmin ? 'tag tag-accent' : 'tag tag-green';
+  const visibleNav = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
 
   return (
     <div className="app-shell">
@@ -228,7 +230,7 @@ export default function MainLayout({ children }) {
         {/* Sidebar */}
         <nav className={`app-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
           <div className="sidebar-nav">
-            {NAV_ITEMS.map((item) => (
+            {visibleNav.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}

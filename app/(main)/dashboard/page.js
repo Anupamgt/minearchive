@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
+import { readSessionFromCookie } from '../../../lib/session-client';
 import './dashboard.css';
 
 const MapWithNoSSR = dynamic(() => import('../../components/LeafletMap'), {
@@ -19,6 +20,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState({ nodes: 0, uploads: 0, pending: 0, users: 0 });
   const [recentActivity, setRecentActivity] = useState([]);
   const [loadingActivity, setLoadingActivity] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     fetch('/api/stats', { credentials: 'same-origin' })
@@ -30,6 +32,15 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    const session = readSessionFromCookie();
+    const admin = (session?.role || '').toLowerCase() === 'admin';
+    setIsAdmin(admin);
+    if (!admin) {
+      setRecentActivity([]);
+      setLoadingActivity(false);
+      return;
+    }
+
     fetch('/api/audit?limit=6', { credentials: 'same-origin' })
       .then((res) => res.json())
       .then((data) => {
@@ -55,7 +66,11 @@ export default function DashboardPage() {
       <div className="page-header">
         <div>
           <h1>Dashboard</h1>
-          <p className="page-subtitle">Overview of monitoring areas, uploads and recent activity.</p>
+          <p className="page-subtitle">
+            {isAdmin
+              ? 'Overview of monitoring areas, uploads and recent activity.'
+              : 'Overview of monitoring areas and uploaded boundaries.'}
+          </p>
         </div>
       </div>
 
@@ -116,7 +131,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Two Column Layout */}
-      <div className="dash-grid">
+      <div className={`dash-grid${isAdmin ? '' : ' dash-grid-solo'}`}>
         {/* Map Column */}
         <div className="card dash-map-col">
           <div className="card-header dash-col-header">
@@ -134,7 +149,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Activity Column */}
+        {/* Activity Column — admin only; field users must not see the central log */}
+        {isAdmin && (
         <div className="card dash-act-col">
           <div className="card-header dash-col-header">Recent Activity</div>
           <div className="act-list">
@@ -160,6 +176,7 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
+        )}
       </div>
     </div>
   );

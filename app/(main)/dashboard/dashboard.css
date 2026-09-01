@@ -71,6 +71,10 @@
   align-items: start;
 }
 
+.dash-grid-solo {
+  grid-template-columns: 1fr;
+}
+
 .dash-col-header {
   display: flex;
   align-items: center;

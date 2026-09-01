@@ -1,10 +1,11 @@
-import { getSessionUser, unauthorizedResponse } from '../../../lib/auth';
+import { getSessionUser, unauthorizedResponse, forbiddenResponse } from '../../../lib/auth';
 import { getCachedAuditLogs } from '../../../lib/cached-queries';
 import { privateJson } from '../../../lib/cache-headers';
 
 export async function GET(request) {
   const session = await getSessionUser(request);
   if (!session) return unauthorizedResponse();
+  if (session.role?.toLowerCase() !== 'admin') return forbiddenResponse();
 
   try {
     const { searchParams } = new URL(request.url);

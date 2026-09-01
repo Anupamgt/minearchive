@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { SESSION_COOKIE, verifySessionToken } from './lib/auth';
 
 const PROTECTED_PREFIXES = ['/dashboard', '/map', '/upload', '/nodes', '/users', '/audit'];
-const ADMIN_ONLY_PREFIXES = ['/nodes', '/users'];
+const ADMIN_ONLY_PREFIXES = ['/nodes', '/users', '/audit'];
 
 export async function proxy(request) {
   const { pathname } = request.nextUrl;

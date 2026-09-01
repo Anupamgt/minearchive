@@ -223,7 +223,7 @@ archive stays audit-complete — nothing a user clicks destroys history.
 | `GET` | `/api/users` | admin | List users |
 | `POST` | `/api/users` | admin | Create user |
 | `PATCH` | `/api/users/[id]` | admin | Edit role, disable, enable |
-| `GET` | `/api/audit` | signed in | Activity log |
+| `GET` | `/api/audit` | admin | Activity log |
 | `GET` | `/api/health` | public | Liveness; `?deep=1` checks DB + PostGIS |
 
 Admin-only mutations also enforce two invariants: an admin cannot disable or
