@@ -180,6 +180,7 @@ export default function MapPage() {
   const [loadingUploads, setLoadingUploads] = useState(false);
   const [kmlFeatures, setKmlFeatures] = useState([]);
   const [role, setRole] = useState('Admin');
+  const [nodesLoaded, setNodesLoaded] = useState(false);
   const [breachModal, setBreachModal] = useState(false);
   const [breachReason, setBreachReason] = useState(
     'Exceeded approved perimeter boundary by 14.2 meters towards northern riverbank'
@@ -204,13 +205,23 @@ export default function MapPage() {
     fetch('/api/nodes', { credentials: 'same-origin' })
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data)) setNodes(data);
+        setNodes(Array.isArray(data) ? data : []);
+        setNodesLoaded(true);
       })
-      .catch(() => setNodes([]));
+      .catch(() => {
+        setNodes([]);
+        setNodesLoaded(true);
+      });
   }, []);
 
+  const effectiveNodeId = useMemo(() => {
+    if (!selectedNode) return null;
+    if (!nodesLoaded) return selectedNode;
+    return nodes.some((n) => n.id === selectedNode) ? selectedNode : null;
+  }, [selectedNode, nodes, nodesLoaded]);
+
   useEffect(() => {
-    if (!selectedNode) {
+    if (!effectiveNodeId) {
       setUploads([]);
       setShownUploads(new Set());
       setSelectedUploadId(null);
@@ -218,7 +229,7 @@ export default function MapPage() {
       return;
     }
     setLoadingUploads(true);
-    fetch(`/api/uploads?nodeId=${encodeURIComponent(selectedNode)}`, {
+    fetch(`/api/uploads?nodeId=${encodeURIComponent(effectiveNodeId)}`, {
       credentials: 'same-origin',
     })
       .then((res) => res.json())
@@ -243,7 +254,7 @@ export default function MapPage() {
         setSelectedUploadId(null);
         setSelectedGeometryId(null);
       });
-  }, [selectedNode]);
+  }, [effectiveNodeId]);
 
   // Load GeoJSON for all shown uploads (supports multiple KML overlays)
   useEffect(() => {
@@ -253,7 +264,7 @@ export default function MapPage() {
       return;
     }
     const params = new URLSearchParams({ uploadIds: ids.join(',') });
-    if (selectedNode) params.set('nodeId', selectedNode);
+    if (effectiveNodeId) params.set('nodeId', effectiveNodeId);
 
     fetch(`/api/map/layers?${params.toString()}`, { credentials: 'same-origin' })
       .then((res) => res.json())
@@ -261,7 +272,7 @@ export default function MapPage() {
         setKmlFeatures(Array.isArray(fc?.features) ? fc.features : []);
       })
       .catch(() => setKmlFeatures([]));
-  }, [shownUploads, selectedNode]);
+  }, [shownUploads, effectiveNodeId]);
 
   const toggleShow = (uploadId) => {
     setShownUploads((prev) => {
@@ -300,7 +311,7 @@ export default function MapPage() {
     showToast('Hid all boundary layers', 'info');
   };
 
-  const activeNodeObj = nodes.find((n) => n.id === selectedNode);
+  const activeNodeObj = nodes.find((n) => n.id === effectiveNodeId);
   const nodeName = activeNodeObj?.name || 'Monitoring area';
 
   const uploadColorIndex = useMemo(() => {
@@ -418,11 +429,11 @@ export default function MapPage() {
 
   const confirmFlagBreach = async (e) => {
     e.preventDefault();
-    if (!selectedNode) return;
+    if (!effectiveNodeId) return;
 
     setSavingBreach(true);
     try {
-      const res = await fetch(`/api/nodes/${encodeURIComponent(selectedNode)}/breach`, {
+      const res = await fetch(`/api/nodes/${encodeURIComponent(effectiveNodeId)}/breach`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
@@ -475,7 +486,7 @@ export default function MapPage() {
       {/* Map canvas */}
       <div className="gis-map">
         <MapWithNoSSR
-          selectedNode={selectedNode}
+          selectedNode={effectiveNodeId}
           onSelectNode={(id) => {
             setSelectedNode(id);
             const n = nodes.find((x) => x.id === id);
@@ -491,11 +502,17 @@ export default function MapPage() {
           }}
         />
 
-        {!selectedNode && (
+        {!effectiveNodeId && (
           <div className="map-hint-card">
-            <strong>Pick a monitoring area to begin</strong>
+            <strong>
+              {nodesLoaded && nodes.length === 0 && !isAdmin
+                ? 'No assigned monitoring areas'
+                : 'Pick a monitoring area to begin'}
+            </strong>
             <span>
-              Choose an area from the Layers panel, or click any highlighted boundary on the map.
+              {nodesLoaded && nodes.length === 0 && !isAdmin
+                ? 'You can only see sites an administrator assigns to you. Once assigned, their outlines will appear here.'
+                : 'Choose an area from the Layers panel, or click any highlighted boundary on the map.'}
             </span>
           </div>
         )}
@@ -566,7 +583,7 @@ export default function MapPage() {
           <label htmlFor="area-picker">Monitoring area</label>
           <select
             id="area-picker"
-            value={selectedNode || ''}
+            value={effectiveNodeId || ''}
             onChange={(e) => setSelectedNode(e.target.value || null)}
           >
             <option value="">Select an area…</option>
@@ -579,12 +596,14 @@ export default function MapPage() {
           </select>
           {nodes.length === 0 && (
             <p className="help-text">
-              No areas yet. Create one under “Areas”, then upload a KML/KMZ boundary.
+              {isAdmin
+                ? 'No areas yet. Create one under “Areas”, then upload a KML/KMZ boundary.'
+                : 'No monitoring areas are assigned to you. Ask an administrator to assign you to one or more sites.'}
             </p>
           )}
         </div>
 
-        {!selectedNode ? (
+        {!effectiveNodeId ? (
           <div className="gis-empty">
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4m0 13V4m0 0L9 7" />

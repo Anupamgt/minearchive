@@ -1,6 +1,7 @@
 import { prisma } from '../../../../lib/db';
 import { getSessionUser, unauthorizedResponse } from '../../../../lib/auth';
 import { privateJson } from '../../../../lib/cache-headers';
+import { getAccessibleNodeIds } from '../../../../lib/site-access';
 
 /**
  * GeoJSON FeatureCollection of stored KML polygons.
@@ -20,12 +21,26 @@ export async function GET(request) {
       ? uploadIdsParam.split(',').map((s) => s.trim()).filter(Boolean)
       : [];
 
+    const accessibleNodeIds = await getAccessibleNodeIds(session);
+    if (Array.isArray(accessibleNodeIds) && accessibleNodeIds.length === 0) {
+      return privateJson({ type: 'FeatureCollection', features: [] });
+    }
+    if (nodeId && Array.isArray(accessibleNodeIds) && !accessibleNodeIds.includes(nodeId)) {
+      return privateJson({ type: 'FeatureCollection', features: [] });
+    }
+
     const conditions = [`u."isDeleted" = false`, `ug.geom IS NOT NULL`];
     const params = [];
 
     if (nodeId) {
       params.push(nodeId);
       conditions.push(`u."nodeId" = $${params.length}`);
+    } else if (Array.isArray(accessibleNodeIds)) {
+      const placeholders = accessibleNodeIds.map((id) => {
+        params.push(id);
+        return `$${params.length}`;
+      });
+      conditions.push(`u."nodeId" IN (${placeholders.join(', ')})`);
     }
 
     if (uploadIds.length > 0) {

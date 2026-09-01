@@ -30,7 +30,7 @@ git checkout v1.0.0   # site names + file inspect card
 - **Change Detection** — Automated boundary diff metrics (area change, perimeter change) + visual polygon overlay comparison
 - **Audit Trail** — Immutable compliance logging of all system actions
 - **PDF Reports** — Per-node history export for external stakeholders
-- **Role-Based Access** — Central Administrator (full access) and Field Users (upload + view)
+- **Role-Based Access** — Central Administrator (all sites) and Field Users (upload + view only on assigned monitoring areas)
 
 ## Architecture
 

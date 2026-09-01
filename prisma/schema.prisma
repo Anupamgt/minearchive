@@ -20,8 +20,9 @@ model User {
   lastLogin    DateTime?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
-  
-  auditLogs    AuditLog[]
+
+  auditLogs     AuditLog[]
+  assignedSites UserSiteAssignment[]
 }
 
 model Node {
@@ -36,6 +37,23 @@ model Node {
   updatedAt     DateTime  @updatedAt
 
   uploads       Upload[]
+  assignedUsers UserSiteAssignment[]
+}
+
+/// Many-to-many: a field user can be assigned to several monitoring areas,
+/// and a site can have several assigned users. Admins ignore this table and
+/// see every site. Enforcement is in the Next.js APIs (lib/site-access.js),
+/// not Supabase RLS.
+model UserSiteAssignment {
+  userId     String
+  nodeId     String
+  assignedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  node Node @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@id([userId, nodeId])
+  @@index([nodeId])
 }
 
 model Upload {
