@@ -18,8 +18,8 @@ In **Project → Settings → Environment Variables**, add for **Production** (a
 
 | Name | Value |
 |---|---|
-| `DATABASE_URL` | Supabase **Transaction** pooler (`:6543` + `pgbouncer=true&connection_limit=1&sslmode=require`) |
-| `DIRECT_URL` | Supabase **Session** pooler (`:5432` + `sslmode=require`) |
+| `DATABASE_URL` | Supabase **Transaction** pooler (`:6543` + `pgbouncer=true&connection_limit=1&sslmode=require`), or Oracle PgBouncer (`:6543` + `pgbouncer=true&sslmode=disable`) — [oracle-cloud-postgis.md](oracle-cloud-postgis.md) |
+| `DIRECT_URL` | Supabase **Session** pooler (`:5432` + `sslmode=require`), or Oracle Postgres (`:5432` + `sslmode=disable`) |
 | `SESSION_SECRET` | Long random hex (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`) |
 | `GOOGLE_CLIENT_ID` | From Google Cloud OAuth client |
 | `GOOGLE_CLIENT_SECRET` | From Google Cloud OAuth client |

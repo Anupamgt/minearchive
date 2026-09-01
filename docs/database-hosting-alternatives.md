@@ -14,7 +14,7 @@ Supabase Free pauses after ~7 days of no traffic. That is a host pause, not an a
 | **[Render](https://render.com)** | Paid Postgres now | Yes | — | Free Postgres was removed. Fine if you can pay. |
 | **[Railway](https://railway.app)** | ~$5 credit / month | Yes (template) | Stops when credit runs out | Easy UI, not forever-free. |
 | **[Fly.io](https://fly.io/docs/postgres)** | Usage-based | Yes if you install it | — | You run the machine. |
-| **Oracle Cloud Always Free** | Free VM | Yes (you install) | No | More setup: VM + Docker PostGIS. |
+| **Oracle Cloud Always Free** | Free VM | Yes (you install) | No | Ampere VM. Step-by-step: [oracle-cloud-postgis.md](oracle-cloud-postgis.md). Scripts in `deploy/oracle/`. |
 | **AWS / GCP / Azure free credits** | Trial credit | Yes | When credit ends | Good for a few months, then paid. |
 | **Supabase Pro** | Paid | Yes | No | Same project, no auto-pause. |
 
@@ -25,8 +25,9 @@ Firebase, PlanetScale, Turso, MongoDB Atlas, Cockroach serverless — no PostGIS
 ## Fastest path off Supabase Free
 
 1. **Dev:** keep using local Docker (no pause, no advisor noise).
-2. **Prod, still free:** Neon → enable PostGIS → copy the connection string into Vercel `DATABASE_URL` and `DIRECT_URL` → `npm run db:supabase` (or `prisma db push`) → redeploy.
-3. **Prod, least hassle:** stay on Supabase and upgrade to Pro.
+2. **Prod, still free, least setup:** Neon → enable PostGIS → copy the connection string into Vercel `DATABASE_URL` and `DIRECT_URL` → `npm run db:supabase` (or `prisma db push`) → redeploy.
+3. **Prod, still free, no pause / no scale-to-zero:** [Oracle Cloud Always Free](oracle-cloud-postgis.md) — you create an Ampere VM; `deploy/oracle/setup-vm.sh` installs PostGIS + PgBouncer.
+4. **Prod, least hassle:** stay on Supabase and upgrade to Pro.
 
 ## Point MineArchive at a new host
 

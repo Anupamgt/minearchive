@@ -276,14 +276,17 @@ graph LR
     GH -->|push to branch| PREV["Vercel Preview"]
     PROD --> SUPA[("Supabase<br/>ap-south-1")]
     PREV --> SUPA
-    ALT["Self-host<br/>Dockerfile + docker-compose<br/>postgis/postgis:15-3.3"] -.->|alternative| SUPA
+    ALT["Self-host / Oracle Always Free<br/>PostGIS + PgBouncer"] -.->|alternative| SUPA
 ```
 
 `next.config.mjs` sets `output: 'standalone'` **only when not on Vercel**, so the
 Docker path still produces a self-contained server while Vercel uses its own
 tracing.
 
-**Connection strings.** Prisma needs two, because Supabase's transaction pooler
+Oracle Always Free is the same split on a VM you run: see
+[oracle-cloud-postgis.md](oracle-cloud-postgis.md).
+
+**Connection strings.** Prisma needs two, because a transaction pooler
 cannot run DDL:
 
 | Variable | Port | Used for |

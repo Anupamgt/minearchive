@@ -42,7 +42,7 @@ auth flow, KML ingestion pipeline, data model, and deployment topology.
 | Frontend | Next.js 16 (App Router) + Vanilla CSS |
 | Map | Leaflet.js via react-leaflet, OpenStreetMap tiles |
 | Backend | Next.js Route Handlers |
-| Database | PostgreSQL + PostGIS (Supabase, or local Docker) |
+| Database | PostgreSQL + PostGIS (Supabase, local Docker, or [Oracle Always Free](docs/oracle-cloud-postgis.md)) |
 | ORM | Prisma, with raw SQL for PostGIS geometry |
 | Auth | Google OAuth + HMAC-signed session cookie |
 | Hosting | Vercel (Dockerfile provided for self-hosting) |
@@ -84,7 +84,7 @@ Hosted Supabase Security Advisor may flag `public.spatial_ref_sys` as “RLS Dis
 
 Smoke test: `GET /api/health?deep=1` should return `"database":"ok"`.
 
-Free/cheap hosts if you want to leave Supabase: **[docs/database-hosting-alternatives.md](docs/database-hosting-alternatives.md)**. Neon is the usual hosted free pick; local Docker is already in this repo.
+Free/cheap hosts if you want to leave Supabase: **[docs/database-hosting-alternatives.md](docs/database-hosting-alternatives.md)**. Neon is the usual hosted free pick; local Docker is already in this repo. For a free VM that does not pause, see **[Oracle Cloud Always Free + PostGIS](docs/oracle-cloud-postgis.md)**.
 
 ## Deploy to Vercel (dashboard only — no CLI)
 
