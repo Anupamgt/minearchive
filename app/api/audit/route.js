@@ -1,16 +1,19 @@
-import { getSessionUser, unauthorizedResponse, forbiddenResponse } from '../../../lib/auth';
+import { getSessionUser, unauthorizedResponse } from '../../../lib/auth';
 import { getCachedAuditLogs } from '../../../lib/cached-queries';
 import { privateJson } from '../../../lib/cache-headers';
+import { getAccessibleNodeIds, isAdmin } from '../../../lib/site-access';
 
 export async function GET(request) {
   const session = await getSessionUser(request);
   if (!session) return unauthorizedResponse();
-  if (session.role?.toLowerCase() !== 'admin') return forbiddenResponse();
 
   try {
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '50', 10);
-    const logs = await getCachedAuditLogs(limit);
+    const accessibleNodeIds = await getAccessibleNodeIds(session);
+    const logs = await getCachedAuditLogs(limit, {
+      nodeIds: isAdmin(session) ? undefined : accessibleNodeIds,
+    });
     return privateJson(logs);
   } catch (error) {
     console.error('GET /api/audit error:', error);

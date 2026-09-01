@@ -7,6 +7,7 @@ import { getSessionUser, unauthorizedResponse } from '../../../lib/auth';
 import { getCachedUploads, CACHE_TAGS } from '../../../lib/cached-queries';
 import { privateJson, bustTags } from '../../../lib/cache-headers';
 import { polygonsFromGeoJson } from '../../../lib/kml';
+import { canAccessNodeId, getAccessibleNodeIds } from '../../../lib/site-access';
 
 /**
  * Read the KML text out of an uploaded file, transparently handling KMZ.
@@ -47,7 +48,10 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const nodeId = searchParams.get('nodeId');
-    const uploads = await getCachedUploads(nodeId);
+    const accessibleNodeIds = await getAccessibleNodeIds(session);
+    const uploads = await getCachedUploads(nodeId, {
+      allowedNodeIds: accessibleNodeIds === null ? undefined : accessibleNodeIds,
+    });
     return privateJson(uploads);
   } catch (error) {
     console.error('GET /api/uploads error:', error);
@@ -71,6 +75,7 @@ async function processOneKmlFile({ file, nodeId, category, surveyDate, notes, up
 
   // Validate node if provided
   let resolvedNodeId = nodeId || null;
+  let nodeName = null;
   if (resolvedNodeId) {
     const node = await prisma.node.findUnique({ where: { id: resolvedNodeId } });
     if (!node) {
@@ -80,6 +85,7 @@ async function processOneKmlFile({ file, nodeId, category, surveyDate, notes, up
         error: `Unknown node id: ${resolvedNodeId}`,
       };
     }
+    nodeName = node.name;
   }
 
   const upload = await prisma.upload.create({
@@ -138,7 +144,9 @@ async function processOneKmlFile({ file, nodeId, category, surveyDate, notes, up
       action: 'Upload KML',
       targetType: 'Upload',
       targetId: upload.id,
-      details: `Uploaded KML ${file.name} (${parsedFeatures} polygons detected)`,
+      details: nodeName
+        ? `Uploaded KML ${file.name} to ${nodeName} (${parsedFeatures} polygons detected)`
+        : `Uploaded KML ${file.name} (${parsedFeatures} polygons detected)`,
     },
   });
 
@@ -163,6 +171,15 @@ export async function POST(request) {
     const surveyDate = formData.get('surveyDate');
     const notes = formData.get('notes');
     const uploadedBy = session.name;
+
+    const accessibleNodeIds = await getAccessibleNodeIds(session);
+    const resolvedNodeId = nodeId ? String(nodeId) : null;
+    if (!canAccessNodeId(accessibleNodeIds, resolvedNodeId)) {
+      return privateJson(
+        { error: 'You can only upload to a monitoring area you are assigned to.' },
+        { status: 403 }
+      );
+    }
 
     // Support single `file` or multiple `files`
     const files = [];
