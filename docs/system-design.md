@@ -104,6 +104,12 @@ to decide what UI to render. The signature is what makes this safe — a forged
 `{"role":"Admin"}` cookie fails verification server-side. Every authorization
 decision happens on the server; the client copy only affects presentation.
 
+Field users are additionally scoped to the monitoring areas in
+`UserSiteAssignment` (`lib/site-access.js`). Admins ignore that table and see
+every site. An unassigned field user receives empty node, upload, map, and
+site-activity lists — never a fallback to all sites. Enforcement is in the
+Next.js APIs, not Supabase RLS.
+
 ---
 
 ## 3. KML/KMZ ingestion
@@ -150,6 +156,8 @@ Three details that were load-bearing:
 ```mermaid
 erDiagram
     User ||--o{ AuditLog : "acts"
+    User ||--o{ UserSiteAssignment : "assigned to"
+    Node ||--o{ UserSiteAssignment : "has assignees"
     Node ||--o{ Upload : "has surveys"
     Upload ||--o{ UploadGeometry : "contains polygons"
     Upload ||--o{ UploadAttachment : "has files"
@@ -192,6 +200,11 @@ erDiagram
         string details
         datetime timestamp
     }
+    UserSiteAssignment {
+        uuid userId PK,FK
+        uuid nodeId PK,FK
+        datetime assignedAt
+    }
 ```
 
 Prisma cannot express PostGIS types, so `geom` is declared
@@ -211,19 +224,19 @@ archive stays audit-complete — nothing a user clicks destroys history.
 | `POST` | `/api/auth/login` | public | Email + password, sets signed cookie |
 | `GET` | `/api/auth/google` | public | Start OAuth, sets state cookie |
 | `GET` | `/api/auth/callback/google` | public | Exchange code, upsert user |
-| `GET` | `/api/stats` | signed in | Dashboard counters |
-| `GET` | `/api/nodes` | signed in | List monitoring areas |
+| `GET` | `/api/stats` | signed in | Dashboard counters (field users: assigned sites only) |
+| `GET` | `/api/nodes` | signed in | List monitoring areas (field users: assigned only) |
 | `POST` | `/api/nodes` | admin | Create area |
 | `PATCH` | `/api/nodes/[id]` | admin | Rename, archive, restore |
 | `POST` | `/api/nodes/[id]/breach` | admin | Record encroachment notice |
-| `GET` | `/api/uploads` | signed in | Survey history (`?nodeId=`) |
-| `POST` | `/api/uploads` | signed in | Multi-file KML/KMZ ingest |
+| `GET` | `/api/uploads` | signed in | Survey history (`?nodeId=`; field users scoped) |
+| `POST` | `/api/uploads` | signed in | Multi-file KML/KMZ ingest (field users: assigned node only) |
 | `DELETE` | `/api/uploads/[id]` | admin | Soft-delete a boundary file |
-| `GET` | `/api/map/layers` | signed in | GeoJSON FeatureCollection |
-| `GET` | `/api/users` | admin | List users |
-| `POST` | `/api/users` | admin | Create user |
-| `PATCH` | `/api/users/[id]` | admin | Edit role, disable, enable |
-| `GET` | `/api/audit` | admin | Activity log |
+| `GET` | `/api/map/layers` | signed in | GeoJSON FeatureCollection (field users scoped) |
+| `GET` | `/api/users` | admin | List users (includes `assignedSites`) |
+| `POST` | `/api/users` | admin | Create user (`assignedNodeIds`) |
+| `PATCH` | `/api/users/[id]` | admin | Edit role, sites, disable, enable |
+| `GET` | `/api/audit` | signed in | Activity log (admin: all; field user: assigned-site actions only) |
 | `GET` | `/api/health` | public | Liveness; `?deep=1` checks DB + PostGIS |
 
 Admin-only mutations also enforce two invariants: an admin cannot disable or

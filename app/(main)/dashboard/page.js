@@ -35,11 +35,6 @@ export default function DashboardPage() {
     const session = readSessionFromCookie();
     const admin = (session?.role || '').toLowerCase() === 'admin';
     setIsAdmin(admin);
-    if (!admin) {
-      setRecentActivity([]);
-      setLoadingActivity(false);
-      return;
-    }
 
     fetch('/api/audit?limit=6', { credentials: 'same-origin' })
       .then((res) => res.json())
@@ -69,7 +64,7 @@ export default function DashboardPage() {
           <p className="page-subtitle">
             {isAdmin
               ? 'Overview of monitoring areas, uploads and recent activity.'
-              : 'Overview of monitoring areas and uploaded boundaries.'}
+              : 'Overview of your assigned monitoring areas and their activity.'}
           </p>
         </div>
       </div>
@@ -131,7 +126,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Two Column Layout */}
-      <div className={`dash-grid${isAdmin ? '' : ' dash-grid-solo'}`}>
+      <div className="dash-grid">
         {/* Map Column */}
         <div className="card dash-map-col">
           <div className="card-header dash-col-header">
@@ -149,10 +144,11 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Activity Column — admin only; field users must not see the central log */}
-        {isAdmin && (
+        {/* Activity: admins see the full trail; field users only assigned sites */}
         <div className="card dash-act-col">
-          <div className="card-header dash-col-header">Recent Activity</div>
+          <div className="card-header dash-col-header">
+            {isAdmin ? 'Recent Activity' : 'Activity on your sites'}
+          </div>
           <div className="act-list">
             {loadingActivity ? (
               [0, 1, 2, 3, 4].map((i) => (
@@ -163,7 +159,9 @@ export default function DashboardPage() {
             ) : recentActivity.length === 0 ? (
               <div className="act-row">
                 <span className="act-text">
-                  No activity yet. Uploads, area changes and sign-ins will appear here.
+                  {isAdmin
+                    ? 'No activity yet. Uploads, area changes and sign-ins will appear here.'
+                    : 'No activity yet on your assigned sites. Uploads and area changes for those sites will appear here.'}
                 </span>
               </div>
             ) : (
@@ -176,7 +174,6 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
-        )}
       </div>
     </div>
   );

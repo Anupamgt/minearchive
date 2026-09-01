@@ -40,6 +40,9 @@ export default function UploadPage() {
         if (Array.isArray(data) && data.length > 0) {
           setNodes(data);
           setNodeId(data[0].id);
+        } else {
+          setNodes([]);
+          setNodeId('');
         }
       })
       .catch(() => setNodes([]));
@@ -232,7 +235,7 @@ export default function UploadPage() {
                   required
                 >
                   {nodes.length === 0 ? (
-                    <option value="">No areas yet — create one first</option>
+                    <option value="">No assigned monitoring areas</option>
                   ) : (
                     nodes.map((n) => (
                       <option key={n.id} value={n.id}>
@@ -241,7 +244,11 @@ export default function UploadPage() {
                     ))
                   )}
                 </select>
-                <p className="help-text">The mining boundary this file belongs to.</p>
+                <p className="help-text">
+                  {nodes.length === 0
+                    ? 'You can only upload to sites assigned to you. Ask an administrator to assign a monitoring area.'
+                    : 'The mining boundary this file belongs to.'}
+                </p>
               </div>
               <div className="form-group">
                 <label htmlFor="upload-date">Survey date</label>
