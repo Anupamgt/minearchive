@@ -1,6 +1,36 @@
 .nodes-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+.nodes-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+
+.nodes-filter {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-subtle);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.nodes-filter:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.nodes-filter.active {
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .nodes-skeletons {

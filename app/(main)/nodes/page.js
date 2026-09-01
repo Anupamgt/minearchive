@@ -1,8 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '../../components/ToastProvider';
 import './nodes.css';
+
+const STATUS_FILTERS = [
+  { id: 'all', label: 'All' },
+  { id: 'active', label: 'Active' },
+  { id: 'proposed', label: 'Pending review' },
+  { id: 'archived', label: 'Archived' },
+];
 
 function StatusTag({ status }) {
   const s = (status || '').toLowerCase();
@@ -12,7 +20,18 @@ function StatusTag({ status }) {
 }
 
 export default function NodesPage() {
+  return (
+    <Suspense fallback={<div className="nodes-container" />}>
+      <NodesPageInner />
+    </Suspense>
+  );
+}
+
+function NodesPageInner() {
   const { showToast } = useToast();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const statusFilter = (searchParams.get('status') || 'all').toLowerCase();
   const [nodes, setNodes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -94,14 +113,27 @@ export default function NodesPage() {
   };
 
   const updateNodeStatus = (node, nextStatus) => {
+    const current = (node.status || '').toLowerCase();
     const message =
       nextStatus === 'archived'
         ? `Archived monitoring area: ${node.name}`
+        : nextStatus === 'active' && current === 'proposed'
+          ? `Approved monitoring area: ${node.name}`
         : nextStatus === 'active'
           ? `Restored monitoring area: ${node.name}`
           : `Updated ${node.name} → ${nextStatus}`;
     return patchNode(node, { status: nextStatus }, message, nextStatus === 'archived' ? 'warning' : 'success');
   };
+
+  const setStatusFilter = (id) => {
+    router.replace(id === 'all' ? '/nodes' : `/nodes?status=${id}`);
+  };
+
+  const visibleNodes =
+    statusFilter === 'all'
+      ? nodes
+      : nodes.filter((n) => (n.status || '').toLowerCase() === statusFilter);
+  const isReviewView = statusFilter === 'proposed';
 
   const handleSaveEdit = async (e) => {
     e.preventDefault();
@@ -134,12 +166,31 @@ export default function NodesPage() {
     <div className="nodes-container">
       <div className="page-header">
         <div>
-          <h1>Monitoring Areas</h1>
-          <p className="page-subtitle">Mining boundaries monitored across the district</p>
+          <h1>{isReviewView ? 'Reviews' : 'Monitoring Areas'}</h1>
+          <p className="page-subtitle">
+            {isReviewView
+              ? 'Proposed mining areas waiting for admin approval. Approve to start monitoring.'
+              : 'Mining boundaries monitored across the district'}
+          </p>
         </div>
         <button className="btn btn-primary" onClick={() => setShowModal(true)}>
           New area
         </button>
+      </div>
+
+      <div className="nodes-filters" role="tablist" aria-label="Filter monitoring areas by status">
+        {STATUS_FILTERS.map((filter) => (
+          <button
+            key={filter.id}
+            type="button"
+            role="tab"
+            aria-selected={statusFilter === filter.id}
+            className={`nodes-filter${statusFilter === filter.id ? ' active' : ''}`}
+            onClick={() => setStatusFilter(filter.id)}
+          >
+            {filter.label}
+          </button>
+        ))}
       </div>
 
       <div className="card">
@@ -155,7 +206,7 @@ export default function NodesPage() {
               </div>
             ))}
           </div>
-        ) : nodes.length === 0 ? (
+        ) : visibleNodes.length === 0 ? (
           <div className="empty-state">
             <svg
               width="46"
@@ -169,14 +220,25 @@ export default function NodesPage() {
             >
               <path d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4m0 13V4m0 0L9 7" />
             </svg>
-            <h3>No monitoring areas yet</h3>
+            <h3>
+              {nodes.length === 0
+                ? 'No monitoring areas yet'
+                : isReviewView
+                  ? 'Nothing pending review'
+                  : 'No areas match this filter'}
+            </h3>
             <p>
-              Monitoring areas are the mining boundaries you track over time. Create your first one
-              to start archiving survey data.
+              {nodes.length === 0
+                ? 'Monitoring areas are the mining boundaries you track over time. Create your first one to start archiving survey data.'
+                : isReviewView
+                  ? 'When a new area is created as Proposed, it will show up here for approval.'
+                  : 'Try another status filter, or create a new monitoring area.'}
             </p>
-            <button className="btn btn-primary mt-16" onClick={() => setShowModal(true)}>
-              Create your first monitoring area
-            </button>
+            {nodes.length === 0 ? (
+              <button className="btn btn-primary mt-16" onClick={() => setShowModal(true)}>
+                Create your first monitoring area
+              </button>
+            ) : null}
           </div>
         ) : (
           <table className="table">
@@ -190,8 +252,9 @@ export default function NodesPage() {
               </tr>
             </thead>
             <tbody>
-              {nodes.map((n) => {
+              {visibleNodes.map((n) => {
                 const isArchived = (n.status || '').toLowerCase() === 'archived';
+                const isProposed = (n.status || '').toLowerCase() === 'proposed';
                 const isBusy = busyId === n.id;
                 return (
                   <tr key={n.id} style={isArchived ? { opacity: 0.72 } : undefined}>
@@ -207,6 +270,15 @@ export default function NodesPage() {
                     </td>
                     <td>
                       <div className="nodes-actions">
+                        {isProposed ? (
+                          <button
+                            className="btn btn-primary btn-sm"
+                            disabled={isBusy}
+                            onClick={() => updateNodeStatus(n, 'active')}
+                          >
+                            {isBusy ? 'Working…' : 'Approve'}
+                          </button>
+                        ) : null}
                         <button
                           className="btn btn-outline btn-sm"
                           disabled={isBusy}
