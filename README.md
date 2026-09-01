@@ -84,6 +84,8 @@ Hosted Supabase Security Advisor may flag `public.spatial_ref_sys` as “RLS Dis
 
 Smoke test: `GET /api/health?deep=1` should return `"database":"ok"`.
 
+Free/cheap hosts if you want to leave Supabase: **[docs/database-hosting-alternatives.md](docs/database-hosting-alternatives.md)**. Neon is the usual hosted free pick; local Docker is already in this repo.
+
 ## Deploy to Vercel (dashboard only — no CLI)
 
 See **[docs/vercel-dashboard-deploy.md](docs/vercel-dashboard-deploy.md)**.
