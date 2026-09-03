@@ -63,7 +63,7 @@ export default function AuditPage() {
       return;
     }
 
-    const headers = ['ID', 'Timestamp', 'User', 'Action', 'Monitoring Area', 'Details'];
+    const headers = ['ID', 'Timestamp', 'User', 'Action', 'District', 'Details'];
     const rows = filteredLogs.map((l) => [
       l.id,
       l.timestamp ? String(l.timestamp).replace('T', ' ').substring(0, 16) : '',
@@ -170,7 +170,7 @@ export default function AuditPage() {
                 <th>Timestamp</th>
                 <th>User</th>
                 <th>Action</th>
-                <th>Monitoring area</th>
+                <th>District</th>
                 <th>Details</th>
               </tr>
             </thead>

@@ -134,7 +134,7 @@ const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: ICONS.dashboard },
   { href: '/map', label: 'Map', icon: ICONS.map },
   { href: '/upload', label: 'Upload Boundary', icon: ICONS.upload },
-  { href: '/nodes', label: 'Monitoring Areas', icon: ICONS.nodes, adminOnly: true },
+  { href: '/nodes', label: 'Districts', icon: ICONS.nodes, adminOnly: true },
   {
     href: '/nodes?status=proposed',
     label: 'Reviews',

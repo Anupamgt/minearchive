@@ -8,6 +8,7 @@ import { getCachedUploads, CACHE_TAGS } from '../../../lib/cached-queries';
 import { privateJson, bustTags } from '../../../lib/cache-headers';
 import { polygonsFromGeoJson } from '../../../lib/kml';
 import { canAccessNodeId, getAccessibleNodeIds } from '../../../lib/site-access';
+import { normalizeKmlType } from '../../../lib/attribute-log';
 
 /**
  * Read the KML text out of an uploaded file, transparently handling KMZ.
@@ -59,7 +60,7 @@ export async function GET(request) {
   }
 }
 
-async function processOneKmlFile({ file, nodeId, category, surveyDate, notes, uploadedBy, userId }) {
+async function processOneKmlFile({ file, nodeId, category, surveyDate, notes, kmlType, uploadedBy, userId }) {
   const text = await extractKmlText(file);
   const kmlDom = new DOMParser().parseFromString(text, 'text/xml');
   const geoJson = kml(kmlDom);
@@ -93,7 +94,7 @@ async function processOneKmlFile({ file, nodeId, category, surveyDate, notes, up
       nodeId: resolvedNodeId,
       uploadedBy,
       surveyDate: surveyDate ? new Date(surveyDate) : null,
-      category: category || 'Routine Survey',
+      category: category || null,
       notes: notes || '',
       kmlFilePath: file.name,
     },
@@ -111,7 +112,7 @@ async function processOneKmlFile({ file, nodeId, category, surveyDate, notes, up
       `
       INSERT INTO "UploadGeometry" (
         "id", "uploadId", "geom", "name", "sourceProperties",
-        "partIndex", "partCount", "areaHectares", "perimeterMeters"
+        "partIndex", "partCount", "areaHectares", "perimeterMeters", "kmlType"
       )
       VALUES (
         $1,
@@ -122,7 +123,8 @@ async function processOneKmlFile({ file, nodeId, category, surveyDate, notes, up
         $6,
         $7,
         ST_Area(ST_Force2D(ST_SetSRID(ST_GeomFromGeoJSON($3), 4326))::geography) / 10000.0,
-        ST_Perimeter(ST_Force2D(ST_SetSRID(ST_GeomFromGeoJSON($3), 4326))::geography)
+        ST_Perimeter(ST_Force2D(ST_SetSRID(ST_GeomFromGeoJSON($3), 4326))::geography),
+        $8
       )
       `,
       id,
@@ -131,7 +133,8 @@ async function processOneKmlFile({ file, nodeId, category, surveyDate, notes, up
       poly.name || null,
       JSON.stringify(poly.properties || {}),
       poly.partIndex ?? 0,
-      poly.partCount ?? 1
+      poly.partCount ?? 1,
+      kmlType || null
     );
     parsedFeatures++;
   }
@@ -170,13 +173,21 @@ export async function POST(request) {
     const category = formData.get('category');
     const surveyDate = formData.get('surveyDate');
     const notes = formData.get('notes');
+    const kmlTypeRaw = formData.get('kmlType');
+    const kmlType = normalizeKmlType(kmlTypeRaw === null ? undefined : kmlTypeRaw);
+    if (kmlType === false) {
+      return privateJson(
+        { error: 'kmlType must be Proposed, New, Previous, or blank.' },
+        { status: 400 }
+      );
+    }
     const uploadedBy = session.name;
 
     const accessibleNodeIds = await getAccessibleNodeIds(session);
     const resolvedNodeId = nodeId ? String(nodeId) : null;
     if (!canAccessNodeId(accessibleNodeIds, resolvedNodeId)) {
       return privateJson(
-        { error: 'You can only upload to a monitoring area you are assigned to.' },
+        { error: 'You can only upload to a district you are assigned to.' },
         { status: 403 }
       );
     }
@@ -206,6 +217,7 @@ export async function POST(request) {
           category: category ? String(category) : null,
           surveyDate: surveyDate ? String(surveyDate) : null,
           notes: notes ? String(notes) : null,
+          kmlType: kmlType || null,
           uploadedBy,
           userId: session.id,
         });

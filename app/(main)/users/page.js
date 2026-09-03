@@ -21,9 +21,9 @@ function SiteAssignmentPicker({ nodes, selectedIds, onChange, toggleAssignedSite
     <div className="form-group">
       <label>Assigned sites</label>
       {nodes.length === 0 ? (
-        <p className="help-text">No monitoring areas yet. Create one under Areas first.</p>
+        <p className="help-text">No districts yet. Create one under Districts first.</p>
       ) : (
-        <div className="site-picker" role="group" aria-label="Assigned monitoring areas">
+        <div className="site-picker" role="group" aria-label="Assigned districts">
           {nodes.map((node) => {
             const checked = selectedIds.includes(node.id);
             return (
@@ -365,7 +365,7 @@ export default function UsersPage() {
                     <option value="User">User — can upload boundary files</option>
                     <option value="Admin">Admin — full access and management</option>
                   </select>
-                  <p className="help-text">Admins can manage users and monitoring areas. Users can upload and view only their assigned sites.</p>
+                  <p className="help-text">Admins can manage users and districts. Users can upload and view only their assigned sites.</p>
                 </div>
                 <SiteAssignmentPicker
                   nodes={nodes}

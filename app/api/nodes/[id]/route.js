@@ -2,6 +2,7 @@ import { prisma } from '../../../../lib/db';
 import { getSessionUser, unauthorizedResponse, forbiddenResponse } from '../../../../lib/auth';
 import { CACHE_TAGS } from '../../../../lib/cached-queries';
 import { privateJson, bustTags } from '../../../../lib/cache-headers';
+import { normalizeOptionalString, recordDistrictChangeForNode } from '../../../../lib/attribute-log';
 
 const ALLOWED_STATUSES = new Set(['active', 'proposed', 'archived']);
 
@@ -22,7 +23,9 @@ export async function PATCH(request, { params }) {
     const description =
       typeof body.description === 'string' ? body.description : undefined;
     const locationLabel =
-      typeof body.locationLabel === 'string' ? body.locationLabel.trim() : undefined;
+      body.locationLabel === undefined ? undefined : normalizeOptionalString(body.locationLabel);
+    const geometryId =
+      typeof body.geometryId === 'string' ? body.geometryId.trim() : undefined;
 
     if (status && !ALLOWED_STATUSES.has(status)) {
       return privateJson(
@@ -33,14 +36,14 @@ export async function PATCH(request, { params }) {
 
     const existing = await prisma.node.findUnique({ where: { id } });
     if (!existing) {
-      return privateJson({ error: 'Monitoring area not found' }, { status: 404 });
+      return privateJson({ error: 'District not found' }, { status: 404 });
     }
 
     const data = {};
     if (status) data.status = status;
     if (name) data.name = name;
     if (description !== undefined) data.description = description;
-    if (locationLabel) data.locationLabel = locationLabel;
+    if (locationLabel !== undefined) data.locationLabel = locationLabel;
 
     if (Object.keys(data).length === 0) {
       return privateJson({ error: 'No valid fields to update' }, { status: 400 });
@@ -77,6 +80,16 @@ export async function PATCH(request, { params }) {
       },
     });
 
+    if (locationLabel !== undefined && locationLabel !== (existing.locationLabel || null)) {
+      await recordDistrictChangeForNode({
+        nodeId: node.id,
+        geometryId: geometryId || undefined,
+        oldValue: existing.locationLabel,
+        newValue: locationLabel,
+        changedBy: session.name || session.email || session.id,
+      });
+    }
+
     bustTags(CACHE_TAGS.nodes, CACHE_TAGS.audit);
 
     return privateJson({
@@ -89,6 +102,6 @@ export async function PATCH(request, { params }) {
     });
   } catch (error) {
     console.error('PATCH /api/nodes/[id] error:', error);
-    return privateJson({ error: 'Failed to update monitoring area' }, { status: 500 });
+    return privateJson({ error: 'Failed to update district' }, { status: 500 });
   }
 }

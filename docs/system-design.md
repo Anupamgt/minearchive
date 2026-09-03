@@ -104,7 +104,7 @@ to decide what UI to render. The signature is what makes this safe — a forged
 `{"role":"Admin"}` cookie fails verification server-side. Every authorization
 decision happens on the server; the client copy only affects presentation.
 
-Field users are additionally scoped to the monitoring areas in
+Field users are additionally scoped to the districts in
 `UserSiteAssignment` (`lib/site-access.js`). Admins ignore that table and see
 every site. An unassigned field user receives empty node, upload, map, and
 site-activity lists — never a fallback to all sites. Enforcement is in the
@@ -161,6 +161,7 @@ erDiagram
     Node ||--o{ Upload : "has surveys"
     Upload ||--o{ UploadGeometry : "contains polygons"
     Upload ||--o{ UploadAttachment : "has files"
+    UploadGeometry ||--o{ AttributeChangeLog : "attribute edits"
 
     User {
         uuid id PK
@@ -174,7 +175,7 @@ erDiagram
         uuid id PK
         string name UK
         string status "active | proposed | archived"
-        string locationLabel
+        string locationLabel "District"
     }
     Upload {
         uuid id PK
@@ -190,6 +191,18 @@ erDiagram
         geometry geom "Polygon,4326 + GIST index"
         float areaHectares
         float perimeterMeters
+        string kmlType "Proposed | New | Previous"
+        string name "Site name/code"
+    }
+    AttributeChangeLog {
+        uuid id PK
+        string siteCode
+        uuid geometryId FK
+        string fieldChanged
+        string oldValue
+        string newValue
+        string changedBy
+        datetime changedAt
     }
     AuditLog {
         uuid id PK
@@ -225,14 +238,17 @@ archive stays audit-complete — nothing a user clicks destroys history.
 | `GET` | `/api/auth/google` | public | Start OAuth, sets state cookie |
 | `GET` | `/api/auth/callback/google` | public | Exchange code, upsert user |
 | `GET` | `/api/stats` | signed in | Dashboard counters (field users: assigned sites only) |
-| `GET` | `/api/nodes` | signed in | List monitoring areas (field users: assigned only) |
-| `POST` | `/api/nodes` | admin | Create area |
-| `PATCH` | `/api/nodes/[id]` | admin | Rename, archive, restore |
+| `GET` | `/api/nodes` | signed in | List districts (field users: assigned only) |
+| `POST` | `/api/nodes` | admin | Create district |
+| `PATCH` | `/api/nodes/[id]` | admin | Rename, archive, restore; `locationLabel` is District (writes AttributeChangeLog) |
 | `POST` | `/api/nodes/[id]/breach` | admin | Record encroachment notice |
 | `GET` | `/api/uploads` | signed in | Survey history (`?nodeId=`; field users scoped) |
-| `POST` | `/api/uploads` | signed in | Multi-file KML/KMZ ingest (field users: assigned node only) |
+| `POST` | `/api/uploads` | signed in | Multi-file KML/KMZ ingest (optional `kmlType` default; field users: assigned node only) |
 | `DELETE` | `/api/uploads/[id]` | admin | Soft-delete a boundary file |
-| `GET` | `/api/map/layers` | signed in | GeoJSON FeatureCollection (field users scoped) |
+| `GET` | `/api/map/layers` | signed in | GeoJSON FeatureCollection including `siteName`, `district`, `surveyDate`, `kmlType` |
+| `GET` | `/api/map/activity-log` | signed in | Attribute change log (`?site=` / `?geometryId=`; field users scoped). Not `/audit`. |
+| `PATCH` | `/api/geometries/[id]` | admin | Update site name, `kmlType`, parent `surveyDate`; writes AttributeChangeLog |
+| `GET` | `/api/geometries/[id]/kml` | signed in | Reconstruct current polygon KML (403 if node not accessible) |
 | `GET` | `/api/users` | admin | List users (includes `assignedSites`) |
 | `POST` | `/api/users` | admin | Create user (`assignedNodeIds`) |
 | `PATCH` | `/api/users/[id]` | admin | Edit role, sites, disable, enable |

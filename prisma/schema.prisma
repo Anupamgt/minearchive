@@ -96,6 +96,11 @@ model UploadGeometry {
 
   areaHectares    Float?
   perimeterMeters Float?
+
+  // Optional site classification for GIS exports: Proposed | New | Previous.
+  kmlType         String?
+
+  attributeChanges AttributeChangeLog[]
 }
 
 model UploadAttachment {
@@ -118,4 +123,23 @@ model AuditLog {
   details    String?
   ipAddress  String?
   timestamp  DateTime @default(now())
+}
+
+/// Attribute-level change trail for the Maps GIS Activity Log.
+/// Written only from PATCH paths (geometry attributes + district).
+/// Do not reuse /audit for this contract.
+model AttributeChangeLog {
+  id           String   @id @default(uuid())
+  siteCode     String
+  geometryId   String
+  geometry     UploadGeometry @relation(fields: [geometryId], references: [id], onDelete: Cascade)
+  fieldChanged String
+  oldValue     String?
+  newValue     String?
+  changedBy    String
+  changedAt    DateTime @default(now())
+
+  @@index([siteCode])
+  @@index([geometryId])
+  @@index([changedAt])
 }

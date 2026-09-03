@@ -3,7 +3,7 @@ import { getSessionUser, unauthorizedResponse, forbiddenResponse } from '../../.
 import { privateJson } from '../../../../../lib/cache-headers';
 
 /**
- * Record a formal encroachment breach notice against a monitoring area.
+ * Record a formal encroachment breach notice against a district.
  * POST /api/nodes/[id]/breach  { reason }
  */
 export async function POST(request, { params }) {
@@ -22,7 +22,7 @@ export async function POST(request, { params }) {
 
     const node = await prisma.node.findUnique({ where: { id } });
     if (!node) {
-      return privateJson({ error: 'Monitoring area not found' }, { status: 404 });
+      return privateJson({ error: 'District not found' }, { status: 404 });
     }
 
     const entry = await prisma.auditLog.create({

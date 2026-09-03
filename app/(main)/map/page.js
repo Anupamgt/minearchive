@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 import { useToast } from '../../components/ToastProvider';
 import { readSessionFromCookie } from '../../../lib/session-client';
 import {
@@ -10,6 +11,7 @@ import {
   formatHectares,
   formatMeters,
   geoJsonPolygonToLatLngs,
+  KML_TYPES,
   layerLabel,
 } from '../../../lib/kml';
 import './map.css';
@@ -33,13 +35,111 @@ function formatDate(value) {
   return null;
 }
 
+function fieldChangedLabel(field) {
+  switch (field) {
+    case 'site_name':
+      return 'Site name';
+    case 'kml_type':
+      return 'KML type';
+    case 'survey_date':
+      return 'Survey date';
+    case 'district':
+      return 'District';
+    default:
+      return field || 'Field';
+  }
+}
+
+function SiteAttributeFields({
+  selectedSite,
+  upload,
+  isAdmin,
+  district,
+  nodeId,
+  savingField,
+  onSaveName,
+  onSaveDistrict,
+  onSaveSurveyDate,
+  onSaveKmlType,
+}) {
+  const [draftName, setDraftName] = useState(selectedSite.siteName || '');
+  const [draftDistrict, setDraftDistrict] = useState(district || selectedSite.district || '');
+  const [draftSurveyDate, setDraftSurveyDate] = useState(
+    formatDate(selectedSite.surveyDate) || formatDate(upload.surveyDate) || ''
+  );
+  const [draftKmlType, setDraftKmlType] = useState(selectedSite.kmlType || '');
+
+  return (
+    <div className="map-file-card-fields">
+      <label htmlFor="inspect-site-name">Site name / code</label>
+      <input
+        id="inspect-site-name"
+        type="text"
+        value={draftName}
+        placeholder="Unnamed site"
+        disabled={!isAdmin || savingField === 'name'}
+        onChange={(e) => setDraftName(e.target.value)}
+        onBlur={() => onSaveName(draftName.trim())}
+      />
+
+      <label htmlFor="inspect-district">District</label>
+      <input
+        id="inspect-district"
+        type="text"
+        value={draftDistrict}
+        placeholder="—"
+        disabled={!isAdmin || !nodeId || savingField === 'district'}
+        onChange={(e) => setDraftDistrict(e.target.value)}
+        onBlur={() => onSaveDistrict(draftDistrict.trim())}
+      />
+
+      <label htmlFor="inspect-survey-date">Survey date</label>
+      <input
+        id="inspect-survey-date"
+        type="date"
+        value={draftSurveyDate}
+        disabled={!isAdmin || savingField === 'surveyDate'}
+        onChange={(e) => {
+          const next = e.target.value;
+          setDraftSurveyDate(next);
+          onSaveSurveyDate(next);
+        }}
+      />
+
+      <label htmlFor="inspect-kml-type">KML type</label>
+      <select
+        id="inspect-kml-type"
+        value={draftKmlType}
+        disabled={!isAdmin || savingField === 'kmlType'}
+        onChange={(e) => {
+          const next = e.target.value;
+          setDraftKmlType(next);
+          onSaveKmlType(next);
+        }}
+      >
+        <option value="">—</option>
+        {KML_TYPES.map((type) => (
+          <option key={type} value={type}>
+            {type}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 function FileInspectCard({
   upload,
   sites,
   selectedGeometryId,
   color,
+  isAdmin,
+  district,
+  nodeId,
   onSelectSite,
   onClose,
+  onSaved,
+  onViewHistory,
 }) {
   const totalArea = sites.reduce(
     (sum, site) => sum + (typeof site.areaHectares === 'number' ? site.areaHectares : 0),
@@ -52,6 +152,88 @@ function FileInspectCard({
   const namedCount = sites.filter((site) => site.hasSiteName).length;
   const selectedSite = sites.find((site) => site.id === selectedGeometryId) || null;
   const selectedExtras = selectedSite ? extraAttributes(selectedSite.sourceProperties) : [];
+  const { showToast } = useToast();
+  const [savingField, setSavingField] = useState('');
+  const [downloading, setDownloading] = useState(false);
+
+  const siteCode = selectedSite
+    ? (selectedSite.siteName || '').trim() || selectedSite.id
+    : '';
+
+  const saveGeometry = async (patch, fieldKey) => {
+    if (!selectedSite || !isAdmin) return;
+    setSavingField(fieldKey);
+    try {
+      const res = await fetch(`/api/geometries/${encodeURIComponent(selectedSite.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(patch),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not save');
+      showToast('Saved', 'success');
+      onSaved?.(data);
+    } catch (err) {
+      showToast(err.message || 'Could not save', 'error');
+    } finally {
+      setSavingField('');
+    }
+  };
+
+  const saveDistrict = async (nextValue) => {
+    if (!selectedSite || !isAdmin || !nodeId) return;
+    const next = (nextValue || '').trim();
+    const current = (district || selectedSite.district || '').trim();
+    if (next === current) return;
+    setSavingField('district');
+    try {
+      const res = await fetch(`/api/nodes/${encodeURIComponent(nodeId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ locationLabel: next, geometryId: selectedSite.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not save district');
+      showToast('Saved', 'success');
+      onSaved?.({ district: data.locationLabel ?? next });
+    } catch (err) {
+      showToast(err.message || 'Could not save district', 'error');
+    } finally {
+      setSavingField('');
+    }
+  };
+
+  const downloadKml = async () => {
+    if (!selectedSite) return;
+    setDownloading(true);
+    try {
+      const res = await fetch(`/api/geometries/${encodeURIComponent(selectedSite.id)}/kml`, {
+        credentials: 'same-origin',
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Download failed');
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get('Content-Disposition') || '';
+      const match = disposition.match(/filename="([^"]+)"/);
+      const filename = match?.[1] || 'site.kml';
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      showToast(err.message || 'Could not download KML', 'error');
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   return (
     <aside className="map-file-card" role="region" aria-label="Selected boundary file">
@@ -62,9 +244,7 @@ function FileInspectCard({
             {upload.kmlFilePath || 'Boundary file'}
           </strong>
           <span>
-            {[upload.category, formatDate(upload.surveyDate) || formatDate(upload.uploadDate)]
-              .filter(Boolean)
-              .join(' · ') || 'Survey file'}
+            {formatDate(upload.surveyDate) || formatDate(upload.uploadDate) || 'Survey file'}
           </span>
         </div>
         <button type="button" className="map-file-card-close" aria-label="Close file card" onClick={onClose}>
@@ -85,12 +265,10 @@ function FileInspectCard({
             <dd>{formatDate(upload.uploadDate)}</dd>
           </>
         )}
-        {formatDate(upload.surveyDate) && (
-          <>
-            <dt>Surveyed</dt>
-            <dd>{formatDate(upload.surveyDate)}</dd>
-          </>
-        )}
+        <>
+          <dt>Survey date</dt>
+          <dd>{formatDate(upload.surveyDate) || '—'}</dd>
+        </>
       </dl>
 
       {upload.notes ? <p className="map-file-card-notes">{upload.notes}</p> : null}
@@ -117,12 +295,41 @@ function FileInspectCard({
       {selectedSite && (
         <div className="map-file-card-selected">
           <div className="map-file-card-selected-label">Selected site</div>
-          <div className="map-file-card-selected-name">{selectedSite.label}</div>
+          <div className="map-file-card-selected-name">
+            {selectedSite.siteName || 'Unnamed site'}
+          </div>
           <div className="map-file-card-selected-metrics">
             {formatHectares(selectedSite.areaHectares)}
             {' · '}
             {formatMeters(selectedSite.perimeterMeters)}
           </div>
+
+          <SiteAttributeFields
+            key={`${selectedSite.id}:${selectedSite.siteName || ''}:${selectedSite.kmlType || ''}:${formatDate(selectedSite.surveyDate) || formatDate(upload.surveyDate) || ''}:${district || selectedSite.district || ''}`}
+            selectedSite={selectedSite}
+            upload={upload}
+            isAdmin={isAdmin}
+            district={district}
+            nodeId={nodeId}
+            savingField={savingField}
+            onSaveName={(next) => {
+              const current = (selectedSite.siteName || '').trim();
+              if (next === current) return;
+              saveGeometry({ name: next }, 'name');
+            }}
+            onSaveDistrict={saveDistrict}
+            onSaveSurveyDate={(next) => {
+              const current = formatDate(selectedSite.surveyDate) || formatDate(upload.surveyDate) || '';
+              if (next === current) return;
+              saveGeometry({ surveyDate: next || null }, 'surveyDate');
+            }}
+            onSaveKmlType={(next) => {
+              const current = selectedSite.kmlType || '';
+              if (next === current) return;
+              saveGeometry({ kmlType: next || null }, 'kmlType');
+            }}
+          />
+
           {selectedExtras.length > 0 && (
             <dl className="map-file-card-attrs">
               {selectedExtras.map((row) => (
@@ -133,6 +340,19 @@ function FileInspectCard({
               ))}
             </dl>
           )}
+
+          <div className="map-file-card-actions">
+            <button type="button" className="btn btn-outline btn-sm" onClick={downloadKml} disabled={downloading}>
+              {downloading ? 'Preparing…' : 'Download KML'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => onViewHistory?.(siteCode, selectedSite.id)}
+            >
+              View change history
+            </button>
+          </div>
         </div>
       )}
 
@@ -169,8 +389,88 @@ function FileInspectCard({
   );
 }
 
+function ActivityLogPanel({ initialSite, initialGeometryId }) {
+  const [site, setSite] = useState(initialSite || '');
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const debounceRef = useRef(null);
+
+  useEffect(() => {
+    const load = (query) => {
+      const params = new URLSearchParams({ limit: '80' });
+      if (query) params.set('site', query);
+      if (initialGeometryId && !query) params.set('geometryId', initialGeometryId);
+      setLoading(true);
+      fetch(`/api/map/activity-log?${params.toString()}`, { credentials: 'same-origin' })
+        .then((res) => res.json())
+        .then((data) => {
+          setLogs(Array.isArray(data) ? data : []);
+          setLoading(false);
+        })
+        .catch(() => {
+          setLogs([]);
+          setLoading(false);
+        });
+    };
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => load(site.trim()), site === (initialSite || '') ? 0 : 280);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [site, initialSite, initialGeometryId]);
+
+  return (
+    <div className="gis-activity">
+      <div className="gis-activity-search">
+        <label htmlFor="activity-site-filter">Filter by site code</label>
+        <input
+          id="activity-site-filter"
+          type="search"
+          value={site}
+          placeholder="e.g. SITE-042"
+          onChange={(e) => setSite(e.target.value)}
+        />
+      </div>
+      <div className="gis-activity-list">
+        {loading ? (
+          <>
+            <div className="skeleton" style={{ height: 52, marginBottom: 8 }} />
+            <div className="skeleton" style={{ height: 52, marginBottom: 8 }} />
+            <div className="skeleton" style={{ height: 52 }} />
+          </>
+        ) : logs.length === 0 ? (
+          <p className="gis-activity-empty">
+            {site
+              ? `No attribute changes match “${site}”.`
+              : 'No attribute changes yet. Edits to site name, district, survey date, or KML type will appear here.'}
+          </p>
+        ) : (
+          logs.map((entry) => (
+            <article key={entry.id} className="gis-activity-row">
+              <div className="gis-activity-row-top">
+                <strong>{entry.siteCode}</strong>
+                <span>{entry.changedAt ? String(entry.changedAt).replace('T', ' ').slice(0, 16) : ''}</span>
+              </div>
+              <div className="gis-activity-row-mid">
+                {fieldChangedLabel(entry.fieldChanged)}
+                {': '}
+                <span className="gis-activity-old">{entry.oldValue || '—'}</span>
+                {' → '}
+                <span className="gis-activity-new">{entry.newValue || '—'}</span>
+              </div>
+              <div className="gis-activity-row-by">{entry.changedBy}</div>
+            </article>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function MapPage() {
   const { showToast } = useToast();
+  const router = useRouter();
   const [nodes, setNodes] = useState([]);
   const [selectedNode, setSelectedNode] = useState(null);
   const [uploads, setUploads] = useState([]);
@@ -185,6 +485,10 @@ export default function MapPage() {
   const [breachReason, setBreachReason] = useState(
     'Exceeded approved perimeter boundary by 14.2 meters towards northern riverbank'
   );
+  const [panelTab, setPanelTab] = useState('layers');
+  const [activitySiteFilter, setActivitySiteFilter] = useState('');
+  const [activityGeometryId, setActivityGeometryId] = useState('');
+  const [layersVersion, setLayersVersion] = useState(0);
 
   useEffect(() => {
     const decoded = readSessionFromCookie();
@@ -193,10 +497,23 @@ export default function MapPage() {
 
   // Auto-select a node when arriving from the upload flow (/map?nodeId=...),
   // so freshly uploaded KML polygons are shown on the map immediately.
+  // /map?site=SITE-042 (and/or geometryId) opens the Activity Log pre-filtered.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const nid = new URLSearchParams(window.location.search).get('nodeId');
+    const params = new URLSearchParams(window.location.search);
+    const nid = params.get('nodeId');
+    const site = params.get('site');
+    const geometryId = params.get('geometryId');
     if (nid) setSelectedNode(nid);
+    if (site) {
+      setActivitySiteFilter(site);
+      setPanelTab('activity');
+    }
+    if (geometryId) {
+      setActivityGeometryId(geometryId);
+      setSelectedGeometryId(geometryId);
+      if (!site) setPanelTab('activity');
+    }
   }, []);
 
   const isAdmin = role.toLowerCase() === 'admin';
@@ -272,7 +589,7 @@ export default function MapPage() {
         setKmlFeatures(Array.isArray(fc?.features) ? fc.features : []);
       })
       .catch(() => setKmlFeatures([]));
-  }, [shownUploads, effectiveNodeId]);
+  }, [shownUploads, effectiveNodeId, layersVersion]);
 
   const toggleShow = (uploadId) => {
     setShownUploads((prev) => {
@@ -312,7 +629,8 @@ export default function MapPage() {
   };
 
   const activeNodeObj = nodes.find((n) => n.id === effectiveNodeId);
-  const nodeName = activeNodeObj?.name || 'Monitoring area';
+  const nodeName = activeNodeObj?.name || 'District';
+  const nodeDistrict = activeNodeObj?.locationLabel || '';
 
   const uploadColorIndex = useMemo(() => {
     const map = new Map();
@@ -355,6 +673,11 @@ export default function MapPage() {
             fallbackIndex,
             fallbackCount: totalPerUpload.get(uploadId) || 1,
           }),
+          siteName: props.siteName || '',
+          kmlType: props.kmlType || '',
+          surveyDate: props.surveyDate || null,
+          district: props.district || '',
+          nodeId: props.nodeId || null,
           areaHectares: props.areaHectares,
           perimeterMeters: props.perimeterMeters,
           sourceProperties: props.sourceProperties,
@@ -424,6 +747,36 @@ export default function MapPage() {
     [kmlLayers, selectedUploadId]
   );
   const selectedUploadColor = colorForIndex(uploadColorIndex.get(selectedUploadId) ?? 0);
+  const activeGeometryId = selectedGeometryId || selectedSites[0]?.id || null;
+
+  const openActivityLog = (siteCode, geometryId) => {
+    const params = new URLSearchParams();
+    if (effectiveNodeId) params.set('nodeId', effectiveNodeId);
+    if (siteCode) params.set('site', siteCode);
+    if (geometryId) params.set('geometryId', geometryId);
+    setActivitySiteFilter(siteCode || '');
+    setActivityGeometryId(geometryId || '');
+    setPanelTab('activity');
+    router.replace(`/map?${params.toString()}`, { scroll: false });
+  };
+
+  const refreshAfterAttributeSave = (payload) => {
+    if (payload?.surveyDate !== undefined) {
+      setUploads((prev) =>
+        prev.map((item) =>
+          item.id === selectedUploadId ? { ...item, surveyDate: payload.surveyDate } : item
+        )
+      );
+    }
+    if (payload?.district !== undefined && effectiveNodeId) {
+      setNodes((prev) =>
+        prev.map((node) =>
+          node.id === effectiveNodeId ? { ...node, locationLabel: payload.district } : node
+        )
+      );
+    }
+    setLayersVersion((n) => n + 1);
+  };
 
   const [savingBreach, setSavingBreach] = useState(false);
 
@@ -490,12 +843,12 @@ export default function MapPage() {
           onSelectNode={(id) => {
             setSelectedNode(id);
             const n = nodes.find((x) => x.id === id);
-            showToast(`Opened ${n?.name || 'monitoring area'}`, 'info');
+            showToast(`Opened ${n?.name || 'district'}`, 'info');
           }}
           nodeOutlines={nodeOutlines}
           kmlLayers={kmlLayers}
           selectedUploadId={selectedUploadId}
-          selectedLayerId={selectedGeometryId}
+          selectedLayerId={activeGeometryId}
           onSelectLayer={(layer) => {
             setSelectedUploadId(layer.uploadId);
             setSelectedGeometryId(layer.id);
@@ -506,13 +859,13 @@ export default function MapPage() {
           <div className="map-hint-card">
             <strong>
               {nodesLoaded && nodes.length === 0 && !isAdmin
-                ? 'No assigned monitoring areas'
-                : 'Pick a monitoring area to begin'}
+                ? 'No assigned districts'
+                : 'Pick a district to begin'}
             </strong>
             <span>
               {nodesLoaded && nodes.length === 0 && !isAdmin
                 ? 'You can only see sites an administrator assigns to you. Once assigned, their outlines will appear here.'
-                : 'Choose an area from the Layers panel, or click any highlighted boundary on the map.'}
+                : 'Choose a district from the Layers panel, or click any highlighted boundary on the map.'}
             </span>
           </div>
         )}
@@ -521,8 +874,11 @@ export default function MapPage() {
           <FileInspectCard
             upload={selectedUpload}
             sites={selectedSites}
-            selectedGeometryId={selectedGeometryId}
+            selectedGeometryId={activeGeometryId}
             color={selectedUploadColor}
+            isAdmin={isAdmin}
+            district={nodeDistrict}
+            nodeId={effectiveNodeId}
             onSelectSite={(site) => {
               setSelectedUploadId(site.uploadId);
               setSelectedGeometryId(site.id);
@@ -531,6 +887,8 @@ export default function MapPage() {
               setSelectedUploadId(null);
               setSelectedGeometryId(null);
             }}
+            onSaved={refreshAfterAttributeSave}
+            onViewHistory={openActivityLog}
           />
         )}
 
@@ -540,7 +898,7 @@ export default function MapPage() {
             {legendItems.map((item) => (
               <button
                 type="button"
-                className={`map-legend-row${item.id === selectedGeometryId ? ' active' : ''}`}
+                className={`map-legend-row${item.id === activeGeometryId ? ' active' : ''}`}
                 key={item.id}
                 onClick={() => {
                   setSelectedUploadId(item.uploadId);
@@ -568,25 +926,51 @@ export default function MapPage() {
       {/* Layers panel — GIS "Table of Contents" */}
       <aside className="gis-panel">
         <div className="gis-panel-head">
-          <div className="gis-panel-title">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <polygon points="12 2 2 7 12 12 22 7 12 2" />
-              <polyline points="2 17 12 22 22 17" />
-              <polyline points="2 12 12 17 22 12" />
-            </svg>
-            Layers
+          <div className="gis-panel-tabs" role="tablist" aria-label="Map sidebar">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={panelTab === 'layers'}
+              className={`gis-panel-tab${panelTab === 'layers' ? ' active' : ''}`}
+              onClick={() => setPanelTab('layers')}
+            >
+              Layers
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={panelTab === 'activity'}
+              className={`gis-panel-tab${panelTab === 'activity' ? ' active' : ''}`}
+              onClick={() => setPanelTab('activity')}
+            >
+              Activity Log
+            </button>
           </div>
-          <p className="gis-panel-desc">Monitoring areas and their uploaded boundary files. Click a file to inspect its sites.</p>
+          <p className="gis-panel-desc">
+            {panelTab === 'activity'
+              ? 'Attribute edits for site name, district, survey date, and KML type. Search by site code.'
+              : 'Districts and their uploaded boundary files. Click a file to inspect its sites.'}
+          </p>
         </div>
 
+        {panelTab === 'activity' ? (
+          <ActivityLogPanel
+            key={`${activitySiteFilter}|${activityGeometryId}`}
+            initialSite={activitySiteFilter}
+            initialGeometryId={activityGeometryId}
+          />
+        ) : null}
+
+        {panelTab === 'layers' ? (
+        <>
         <div className="gis-field">
-          <label htmlFor="area-picker">Monitoring area</label>
+          <label htmlFor="area-picker">District</label>
           <select
             id="area-picker"
             value={effectiveNodeId || ''}
             onChange={(e) => setSelectedNode(e.target.value || null)}
           >
-            <option value="">Select an area…</option>
+            <option value="">Select a district…</option>
             {nodes.map((n) => (
               <option key={n.id} value={n.id}>
                 {n.name}
@@ -597,8 +981,8 @@ export default function MapPage() {
           {nodes.length === 0 && (
             <p className="help-text">
               {isAdmin
-                ? 'No areas yet. Create one under “Areas”, then upload a KML/KMZ boundary.'
-                : 'No monitoring areas are assigned to you. Ask an administrator to assign you to one or more sites.'}
+                ? 'No districts yet. Create one under “Districts”, then upload a KML/KMZ boundary.'
+                : 'No districts are assigned to you. Ask an administrator to assign you to one or more sites.'}
             </p>
           )}
         </div>
@@ -608,13 +992,16 @@ export default function MapPage() {
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4m0 13V4m0 0L9 7" />
             </svg>
-            <h3>No area selected</h3>
-            <p>Select a monitoring area above to view and toggle its boundary layers on the map.</p>
+            <h3>No district selected</h3>
+            <p>Select a district above to view and toggle its boundary layers on the map.</p>
           </div>
         ) : (
           <>
             <div className="gis-area-head">
-              <div className="gis-area-name" title={nodeName}>{nodeName}</div>
+              <div>
+                <div className="gis-area-name" title={nodeName}>{nodeName}</div>
+                {nodeDistrict ? <div className="gis-area-district">{nodeDistrict}</div> : null}
+              </div>
               <span className={`tag ${(activeNodeObj?.status || 'active').toLowerCase() === 'active' ? 'tag-green' : 'tag'}`}>
                 {(activeNodeObj?.status || 'active').toUpperCase()}
               </span>
@@ -713,6 +1100,8 @@ export default function MapPage() {
             </div>
           </>
         )}
+        </>
+        ) : null}
       </aside>
 
       {breachModal && (

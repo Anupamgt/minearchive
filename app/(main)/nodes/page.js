@@ -53,7 +53,7 @@ function NodesPageInner() {
       .catch(() => {
         setNodes([]);
         setLoading(false);
-        showToast('Could not load monitoring areas.', 'error');
+        showToast('Could not load districts.', 'error');
       });
   };
 
@@ -64,7 +64,7 @@ function NodesPageInner() {
   const handleCreate = (e) => {
     e.preventDefault();
     if (!formData.name) {
-      showToast('Please enter a name for the monitoring area.', 'warning');
+      showToast('Please enter a name for the district.', 'warning');
       return;
     }
 
@@ -78,12 +78,12 @@ function NodesPageInner() {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || 'Create failed');
         setShowModal(false);
-        showToast(`Created monitoring area: ${formData.name}`, 'success');
+        showToast(`Created district: ${formData.name}`, 'success');
         setFormData({ name: '', status: 'active', locationLabel: 'Ropar District' });
         fetchNodes();
       })
       .catch((err) => {
-        showToast(err.message || 'Failed to create monitoring area', 'error');
+        showToast(err.message || 'Failed to create district', 'error');
       });
   };
 
@@ -105,7 +105,7 @@ function NodesPageInner() {
       showToast(successMessage, tone);
       return true;
     } catch (err) {
-      showToast(err.message || 'Could not update monitoring area', 'error');
+      showToast(err.message || 'Could not update district', 'error');
       return false;
     } finally {
       setBusyId(null);
@@ -116,11 +116,11 @@ function NodesPageInner() {
     const current = (node.status || '').toLowerCase();
     const message =
       nextStatus === 'archived'
-        ? `Archived monitoring area: ${node.name}`
+        ? `Archived district: ${node.name}`
         : nextStatus === 'active' && current === 'proposed'
-          ? `Approved monitoring area: ${node.name}`
+          ? `Approved district: ${node.name}`
         : nextStatus === 'active'
-          ? `Restored monitoring area: ${node.name}`
+          ? `Restored district: ${node.name}`
           : `Updated ${node.name} → ${nextStatus}`;
     return patchNode(node, { status: nextStatus }, message, nextStatus === 'archived' ? 'warning' : 'success');
   };
@@ -144,7 +144,11 @@ function NodesPageInner() {
     }
     const ok = await patchNode(
       editing,
-      { name: editing.name.trim(), status: editing.status },
+      {
+        name: editing.name.trim(),
+        status: editing.status,
+        locationLabel: editing.locationLabel ?? '',
+      },
       `Updated ${editing.name.trim()}`
     );
     if (ok) setEditing(null);
@@ -166,11 +170,11 @@ function NodesPageInner() {
     <div className="nodes-container">
       <div className="page-header">
         <div>
-          <h1>{isReviewView ? 'Reviews' : 'Monitoring Areas'}</h1>
+          <h1>{isReviewView ? 'Reviews' : 'Districts'}</h1>
           <p className="page-subtitle">
             {isReviewView
-              ? 'Proposed mining areas waiting for admin approval. Approve to start monitoring.'
-              : 'Mining boundaries monitored across the district'}
+              ? 'Proposed mining districts waiting for admin approval. Approve to start monitoring.'
+              : 'Mining boundaries monitored by district'}
           </p>
         </div>
         <button className="btn btn-primary" onClick={() => setShowModal(true)}>
@@ -178,7 +182,7 @@ function NodesPageInner() {
         </button>
       </div>
 
-      <div className="nodes-filters" role="tablist" aria-label="Filter monitoring areas by status">
+      <div className="nodes-filters" role="tablist" aria-label="Filter districts by status">
         {STATUS_FILTERS.map((filter) => (
           <button
             key={filter.id}
@@ -222,21 +226,21 @@ function NodesPageInner() {
             </svg>
             <h3>
               {nodes.length === 0
-                ? 'No monitoring areas yet'
+                ? 'No districts yet'
                 : isReviewView
                   ? 'Nothing pending review'
-                  : 'No areas match this filter'}
+                  : 'No districts match this filter'}
             </h3>
             <p>
               {nodes.length === 0
-                ? 'Monitoring areas are the mining boundaries you track over time. Create your first one to start archiving survey data.'
+                ? 'Districts are the mining boundaries you track over time. Create your first one to start archiving survey data.'
                 : isReviewView
-                  ? 'When a new area is created as Proposed, it will show up here for approval.'
-                  : 'Try another status filter, or create a new monitoring area.'}
+                  ? 'When a new district is created as Proposed, it will show up here for approval.'
+                  : 'Try another status filter, or create a new district.'}
             </p>
             {nodes.length === 0 ? (
               <button className="btn btn-primary mt-16" onClick={() => setShowModal(true)}>
-                Create your first monitoring area
+                Create your first district
               </button>
             ) : null}
           </div>
@@ -245,6 +249,7 @@ function NodesPageInner() {
             <thead>
               <tr>
                 <th>Name</th>
+                <th>District</th>
                 <th>Status</th>
                 <th>Boundary files</th>
                 <th>Last updated</th>
@@ -259,6 +264,7 @@ function NodesPageInner() {
                 return (
                   <tr key={n.id} style={isArchived ? { opacity: 0.72 } : undefined}>
                     <td style={{ fontWeight: 600, color: 'var(--text)' }}>{n.name}</td>
+                    <td style={{ color: 'var(--muted)' }}>{n.locationLabel || '—'}</td>
                     <td>
                       <StatusTag status={n.status} />
                     </td>
@@ -287,6 +293,7 @@ function NodesPageInner() {
                               id: n.id,
                               name: n.name,
                               status: (n.status || 'active').toLowerCase(),
+                              locationLabel: n.locationLabel || '',
                             })
                           }
                         >
@@ -323,7 +330,7 @@ function NodesPageInner() {
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>New monitoring area</h3>
+              <h3>New district</h3>
               <button
                 type="button"
                 className="modal-close"
@@ -347,6 +354,17 @@ function NodesPageInner() {
                     placeholder="e.g. Nangal Quarry Sector 4"
                   />
                   <p className="help-text">A clear, recognizable name for this mining boundary.</p>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="node-district">District</label>
+                  <input
+                    id="node-district"
+                    type="text"
+                    value={formData.locationLabel}
+                    onChange={(e) => setFormData({ ...formData, locationLabel: e.target.value })}
+                    placeholder="e.g. Ropar District"
+                  />
+                  <p className="help-text">Administrative district this boundary belongs to.</p>
                 </div>
                 <div className="form-group">
                   <label htmlFor="node-status">Status</label>
@@ -381,7 +399,7 @@ function NodesPageInner() {
         <div className="modal-overlay" onClick={() => setEditing(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Edit monitoring area</h3>
+              <h3>Edit district</h3>
               <button
                 type="button"
                 className="modal-close"
@@ -402,6 +420,16 @@ function NodesPageInner() {
                     type="text"
                     value={editing.name}
                     onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="edit-node-district">District</label>
+                  <input
+                    id="edit-node-district"
+                    type="text"
+                    value={editing.locationLabel || ''}
+                    onChange={(e) => setEditing({ ...editing, locationLabel: e.target.value })}
+                    placeholder="e.g. Ropar District"
                   />
                 </div>
                 <div className="form-group">

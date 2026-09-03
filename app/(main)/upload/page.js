@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '../../components/ToastProvider';
+import { KML_TYPES } from '../../../lib/kml';
 import './upload.css';
 
 function previewPolygonsFromKmlText(text) {
@@ -27,7 +28,7 @@ export default function UploadPage() {
   const [nodes, setNodes] = useState([]);
   const [nodeId, setNodeId] = useState('');
   const [surveyDate, setSurveyDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [category, setCategory] = useState('Routine Survey');
+  const [kmlType, setKmlType] = useState('');
   const [notes, setNotes] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -120,7 +121,7 @@ export default function UploadPage() {
       return;
     }
     if (!nodeId) {
-      showToast('Choose a monitoring area (create one under Monitoring Areas if the list is empty).', 'warning');
+      showToast('Choose a district (create one under Districts if the list is empty).', 'warning');
       return;
     }
 
@@ -129,7 +130,7 @@ export default function UploadPage() {
     for (const f of files) formData.append('files', f);
     formData.append('nodeId', nodeId);
     formData.append('surveyDate', surveyDate);
-    formData.append('category', category);
+    if (kmlType) formData.append('kmlType', kmlType);
     formData.append('notes', notes);
 
     try {
@@ -165,7 +166,7 @@ export default function UploadPage() {
         <div>
           <h1>Upload Boundary File</h1>
           <p className="page-subtitle">
-            Add a KML or KMZ boundary file to a monitoring area. Each file is archived as a dated survey and shown on the map.
+            Add a KML or KMZ boundary file to a district. Each file is archived as a dated survey and shown on the map.
           </p>
         </div>
       </div>
@@ -227,7 +228,7 @@ export default function UploadPage() {
 
             <div className="upload-grid">
               <div className="form-group">
-                <label className="required" htmlFor="upload-node">Monitoring area</label>
+                <label className="required" htmlFor="upload-node">District</label>
                 <select
                   id="upload-node"
                   value={nodeId}
@@ -235,18 +236,19 @@ export default function UploadPage() {
                   required
                 >
                   {nodes.length === 0 ? (
-                    <option value="">No assigned monitoring areas</option>
+                    <option value="">No assigned districts</option>
                   ) : (
                     nodes.map((n) => (
                       <option key={n.id} value={n.id}>
                         {n.name}
+                        {n.locationLabel ? ` — ${n.locationLabel}` : ''}
                       </option>
                     ))
                   )}
                 </select>
                 <p className="help-text">
                   {nodes.length === 0
-                    ? 'You can only upload to sites assigned to you. Ask an administrator to assign a monitoring area.'
+                    ? 'You can only upload to sites assigned to you. Ask an administrator to assign a district.'
                     : 'The mining boundary this file belongs to.'}
                 </p>
               </div>
@@ -263,16 +265,22 @@ export default function UploadPage() {
             </div>
 
             <div className="form-group">
-              <label htmlFor="upload-category">Survey type</label>
+              <label htmlFor="upload-kml-type">KML type</label>
               <select
-                id="upload-category"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
+                id="upload-kml-type"
+                value={kmlType}
+                onChange={(e) => setKmlType(e.target.value)}
               >
-                <option value="Routine Survey">Routine Survey (scheduled monitoring)</option>
-                <option value="Encroachment Report">Encroachment Report (boundary breach)</option>
-                <option value="Restoration Check">Restoration Check (post-mining audit)</option>
+                <option value="">None (optional)</option>
+                {KML_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
               </select>
+              <p className="help-text">
+                Optional default applied to every polygon in this file. You can change it later per site.
+              </p>
             </div>
 
             <div className="form-group">
@@ -302,7 +310,7 @@ export default function UploadPage() {
                   <tr>
                     <th>Boundary</th>
                     <th>Status</th>
-                    <th>Monitoring area</th>
+                    <th>District</th>
                   </tr>
                 </thead>
                 <tbody>

@@ -11,11 +11,17 @@ milestone: `git checkout v0.4.0`.
 ## [Unreleased]
 
 ### Added
-- Many-to-many user ↔ monitoring-area assignments (`UserSiteAssignment`). Admins assign one field user to several sites from Create/Edit user.
-- Field users only see map layers, uploads, dashboard stats, and site-related activity for assigned sites. Unassigned users get empty lists (no all-sites fallback).
+- GIS attribute table on the map inspect card: Site name/code, District (`Node.locationLabel`), Survey date, optional KML type (`Proposed` / `New` / `Previous`).
+- `AttributeChangeLog` plus Maps sidebar Activity Log (`GET /api/map/activity-log?site=`). Deep link `/map?site=SITE-042`. Not `/audit`.
+- Per-site KML download (`GET /api/geometries/[id]/kml`) reconstructed from PostGIS + attributes.
+- Admin `PATCH /api/geometries/[id]` for name, kmlType, and parent survey date.
+
+### Changed
+- UI label “Monitoring Area(s)” is now “District(s)” everywhere. Survey type / `Upload.category` is hidden in the UI (column kept).
 
 ### Notes
-- Production must run `npx prisma db push` (or migrate) after deploy so the `UserSiteAssignment` table exists. This environment had no `DATABASE_URL` / `DIRECT_URL`.
+- Run `prisma/sql/02_gis_attributes.sql` in the Supabase SQL Editor (or `npx prisma db push`) so `UploadGeometry.kmlType` and `AttributeChangeLog` exist. Do not drop `UserSiteAssignment`. Do not enable RLS on `spatial_ref_sys`.
+- Many-to-many user ↔ site assignments (`UserSiteAssignment`) remain in place. Field users stay scoped to assigned sites.
 
 ### Security
 - PostGIS `spatial_ref_sys` is owned by `supabase_admin`, so hosted SQL Editor cannot `ENABLE ROW LEVEL SECURITY` (`must be owner of table`). That Security Advisor item is a false positive (EPSG catalog, no tenant data). Ignore it, or revoke `anon`/`authenticated` if the role allows. Do not move the PostGIS extension on a live database.

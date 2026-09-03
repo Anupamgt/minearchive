@@ -102,8 +102,8 @@ export default function DashboardPage() {
           <h1>Dashboard</h1>
           <p className="page-subtitle">
             {isAdmin
-              ? 'Overview of monitoring areas, uploads and recent activity. Click a card to open it.'
-              : 'Overview of your assigned monitoring areas and their activity. Click a card to open it.'}
+              ? 'Overview of districts, uploads and recent activity. Click a card to open it.'
+              : 'Overview of your assigned districts and their activity. Click a card to open it.'}
           </p>
         </div>
       </div>
@@ -111,7 +111,7 @@ export default function DashboardPage() {
       <div className="stats-strip">
         <StatCard
           href={isAdmin ? '/nodes' : '/map'}
-          label="Monitoring Areas"
+          label="Districts"
           value={stats.nodes}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
