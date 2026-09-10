@@ -858,13 +858,13 @@ export default function MapPage() {
         {!effectiveNodeId && (
           <div className="map-hint-card">
             <strong>
-              {nodesLoaded && nodes.length === 0 && !isAdmin
-                ? 'No assigned districts'
+              {nodesLoaded && nodes.length === 0
+                ? 'No districts yet'
                 : 'Pick a district to begin'}
             </strong>
             <span>
-              {nodesLoaded && nodes.length === 0 && !isAdmin
-                ? 'You can only see sites an administrator assigns to you. Once assigned, their outlines will appear here.'
+              {nodesLoaded && nodes.length === 0
+                ? 'An administrator must create a district under Districts, then you can upload a KML.'
                 : 'Choose a district from the Layers panel, or click any highlighted boundary on the map.'}
             </span>
           </div>
@@ -980,9 +980,7 @@ export default function MapPage() {
           </select>
           {nodes.length === 0 && (
             <p className="help-text">
-              {isAdmin
-                ? 'No districts yet. Create one under “Districts”, then upload a KML/KMZ boundary.'
-                : 'No districts are assigned to you. Ask an administrator to assign you to one or more sites.'}
+              No districts yet. An administrator can create one under “Districts”, then upload a KML/KMZ boundary.
             </p>
           )}
         </div>

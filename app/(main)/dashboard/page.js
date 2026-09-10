@@ -103,7 +103,7 @@ export default function DashboardPage() {
           <p className="page-subtitle">
             {isAdmin
               ? 'Overview of districts, uploads and recent activity. Click a card to open it.'
-              : 'Overview of your assigned districts and their activity. Click a card to open it.'}
+              : 'Overview of districts, uploads and recent activity. Click a card to open it.'}
           </p>
         </div>
       </div>
@@ -173,7 +173,7 @@ export default function DashboardPage() {
               <span className="dash-col-hint">View all</span>
             </Link>
           ) : (
-            <div className="card-header dash-col-header">Activity on your sites</div>
+            <div className="card-header dash-col-header">Recent Activity</div>
           )}
           <div className="act-list">
             {loadingActivity ? (
@@ -185,9 +185,7 @@ export default function DashboardPage() {
             ) : recentActivity.length === 0 ? (
               <div className="act-row">
                 <span className="act-text">
-                  {isAdmin
-                    ? 'No activity yet. Uploads, area changes and sign-ins will appear here.'
-                    : 'No activity yet on your assigned sites. Uploads and area changes for those sites will appear here.'}
+                  No activity yet. Uploads, area changes and sign-ins will appear here.
                 </span>
               </div>
             ) : (

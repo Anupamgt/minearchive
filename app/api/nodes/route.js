@@ -2,17 +2,13 @@ import { prisma } from '../../../lib/db';
 import { getSessionUser, unauthorizedResponse, forbiddenResponse } from '../../../lib/auth';
 import { getCachedNodes, CACHE_TAGS } from '../../../lib/cached-queries';
 import { privateJson, bustTags } from '../../../lib/cache-headers';
-import { getAccessibleNodeIds } from '../../../lib/site-access';
 
 export async function GET(request) {
   const session = await getSessionUser(request);
   if (!session) return unauthorizedResponse();
 
   try {
-    const accessibleNodeIds = await getAccessibleNodeIds(session);
-    const nodes = await getCachedNodes({
-      nodeIds: accessibleNodeIds === null ? undefined : accessibleNodeIds,
-    });
+    const nodes = await getCachedNodes();
     return privateJson(nodes);
   } catch (error) {
     console.error('GET /api/nodes error:', error);

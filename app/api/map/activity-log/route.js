@@ -1,8 +1,7 @@
 import { prisma } from '../../../../lib/db';
 import { getSessionUser, unauthorizedResponse } from '../../../../lib/auth';
 import { privateJson } from '../../../../lib/cache-headers';
-import { getAccessibleNodeIds } from '../../../../lib/site-access';
-import { geometryIdsForNodes, serializeLogEntry } from '../../../../lib/attribute-log';
+import { serializeLogEntry } from '../../../../lib/attribute-log';
 
 /**
  * GET /api/map/activity-log?site=&geometryId=&limit=
@@ -19,25 +18,12 @@ export async function GET(request) {
     const rawLimit = Number(searchParams.get('limit'));
     const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 200) : 80;
 
-    const accessibleNodeIds = await getAccessibleNodeIds(session);
-    if (Array.isArray(accessibleNodeIds) && accessibleNodeIds.length === 0) {
-      return privateJson([]);
-    }
-
     const where = {};
     if (site) {
       where.siteCode = { contains: site, mode: 'insensitive' };
     }
     if (geometryId) {
       where.geometryId = geometryId;
-    }
-
-    if (Array.isArray(accessibleNodeIds)) {
-      const allowedIds = await geometryIdsForNodes(accessibleNodeIds);
-      if (allowedIds.length === 0) return privateJson([]);
-      where.geometryId = geometryId
-        ? (allowedIds.includes(geometryId) ? geometryId : '__none__')
-        : { in: allowedIds };
     }
 
     const rows = await prisma.attributeChangeLog.findMany({

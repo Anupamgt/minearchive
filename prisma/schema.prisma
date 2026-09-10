@@ -40,10 +40,8 @@ model Node {
   assignedUsers UserSiteAssignment[]
 }
 
-/// Many-to-many: a field user can be assigned to several monitoring areas,
-/// and a site can have several assigned users. Admins ignore this table and
-/// see every site. Enforcement is in the Next.js APIs (lib/site-access.js),
-/// not Supabase RLS.
+/// Legacy table. The app no longer reads or writes assignments.
+/// Keep the table in the database — do not DROP it.
 model UserSiteAssignment {
   userId     String
   nodeId     String

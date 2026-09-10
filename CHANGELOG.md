@@ -18,10 +18,11 @@ milestone: `git checkout v0.4.0`.
 
 ### Changed
 - UI label “Monitoring Area(s)” is now “District(s)” everywhere. Survey type / `Upload.category` is hidden in the UI (column kept).
+- Field users sign in with email and pick any existing district on Upload. Site assignment is no longer enforced or shown.
 
 ### Notes
 - Run `prisma/sql/02_gis_attributes.sql` in the Supabase SQL Editor (or `npx prisma db push`) so `UploadGeometry.kmlType` and `AttributeChangeLog` exist. Do not drop `UserSiteAssignment`. Do not enable RLS on `spatial_ref_sys`.
-- Many-to-many user ↔ site assignments (`UserSiteAssignment`) remain in place. Field users stay scoped to assigned sites.
+- `UserSiteAssignment` may still exist in the database; the app no longer reads or writes it.
 
 ### Security
 - PostGIS `spatial_ref_sys` is owned by `supabase_admin`, so hosted SQL Editor cannot `ENABLE ROW LEVEL SECURITY` (`must be owner of table`). That Security Advisor item is a false positive (EPSG catalog, no tenant data). Ignore it, or revoke `anon`/`authenticated` if the role allows. Do not move the PostGIS extension on a live database.

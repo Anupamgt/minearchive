@@ -7,7 +7,6 @@ import { getSessionUser, unauthorizedResponse } from '../../../lib/auth';
 import { getCachedUploads, CACHE_TAGS } from '../../../lib/cached-queries';
 import { privateJson, bustTags } from '../../../lib/cache-headers';
 import { polygonsFromGeoJson } from '../../../lib/kml';
-import { canAccessNodeId, getAccessibleNodeIds } from '../../../lib/site-access';
 import { normalizeKmlType } from '../../../lib/attribute-log';
 
 /**
@@ -49,10 +48,7 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const nodeId = searchParams.get('nodeId');
-    const accessibleNodeIds = await getAccessibleNodeIds(session);
-    const uploads = await getCachedUploads(nodeId, {
-      allowedNodeIds: accessibleNodeIds === null ? undefined : accessibleNodeIds,
-    });
+    const uploads = await getCachedUploads(nodeId);
     return privateJson(uploads);
   } catch (error) {
     console.error('GET /api/uploads error:', error);
@@ -182,14 +178,9 @@ export async function POST(request) {
       );
     }
     const uploadedBy = session.name;
-
-    const accessibleNodeIds = await getAccessibleNodeIds(session);
     const resolvedNodeId = nodeId ? String(nodeId) : null;
-    if (!canAccessNodeId(accessibleNodeIds, resolvedNodeId)) {
-      return privateJson(
-        { error: 'You can only upload to a district you are assigned to.' },
-        { status: 403 }
-      );
+    if (!resolvedNodeId) {
+      return privateJson({ error: 'Choose a district.' }, { status: 400 });
     }
 
     // Support single `file` or multiple `files`

@@ -1,13 +1,7 @@
 import { prisma } from '../../../../lib/db';
 import { getSessionUser, unauthorizedResponse, forbiddenResponse } from '../../../../lib/auth';
 import { privateJson } from '../../../../lib/cache-headers';
-import {
-  assignedSitesInclude,
-  normalizeNodeIds,
-  replaceUserAssignments,
-  serializeUser,
-  validateNodeIds,
-} from '../../../../lib/site-access';
+import { serializeUser } from '../../../../lib/site-access';
 
 const ALLOWED_STATUSES = new Set(['active', 'disabled']);
 const ALLOWED_ROLES = new Set(['admin', 'user']);
@@ -27,10 +21,7 @@ export async function PATCH(request, { params }) {
     const { id } = await params;
     const body = await request.json();
 
-    const existing = await prisma.user.findUnique({
-      where: { id },
-      include: assignedSitesInclude,
-    });
+    const existing = await prisma.user.findUnique({ where: { id } });
     if (!existing) {
       return privateJson({ error: 'User not found' }, { status: 404 });
     }
@@ -57,25 +48,10 @@ export async function PATCH(request, { params }) {
       data.status = status;
     }
 
-    let assignedNodeIds;
-    if (body.assignedNodeIds !== undefined) {
-      assignedNodeIds = normalizeNodeIds(body.assignedNodeIds);
-      if (assignedNodeIds === null) {
-        return privateJson({ error: 'assignedNodeIds must be an array of site ids' }, { status: 400 });
-      }
-      const valid = await validateNodeIds(assignedNodeIds);
-      if (!valid.ok) {
-        return privateJson({ error: valid.error }, { status: 400 });
-      }
-    }
-
-    if (Object.keys(data).length === 0 && assignedNodeIds === undefined) {
+    if (Object.keys(data).length === 0) {
       return privateJson({ error: 'No valid fields to update' }, { status: 400 });
     }
 
-    // Never let an admin lock themselves out or remove the last active admin.
-    // Only relevant when this user is currently an *active* admin and the change
-    // would take that away (disabling them, or demoting them to User).
     const wasActiveAdmin =
       existing.role?.toLowerCase() === 'admin' && existing.status === 'active';
     const willBeAdmin = (data.role ?? existing.role)?.toLowerCase() === 'admin';
@@ -104,33 +80,12 @@ export async function PATCH(request, { params }) {
       }
     }
 
-    const user = await prisma.$transaction(async (tx) => {
-      if (Object.keys(data).length > 0) {
-        await tx.user.update({ where: { id }, data });
-      }
-      if (assignedNodeIds !== undefined) {
-        await replaceUserAssignments(tx, id, assignedNodeIds);
-      }
-      return tx.user.findUnique({
-        where: { id },
-        include: assignedSitesInclude,
-      });
-    });
-
-    const previousSiteNames = serializeUser(existing)
-      .assignedSites.map((s) => s.name)
-      .join(', ');
-    const nextSiteNames = serializeUser(user)
-      .assignedSites.map((s) => s.name)
-      .join(', ');
+    const user = await prisma.user.update({ where: { id }, data });
 
     const changes = [];
     if (data.name && data.name !== existing.name) changes.push(`name → ${data.name}`);
     if (data.role && data.role !== existing.role) changes.push(`role → ${data.role}`);
     if (data.status && data.status !== existing.status) changes.push(`status → ${data.status}`);
-    if (assignedNodeIds !== undefined && previousSiteNames !== nextSiteNames) {
-      changes.push(`sites → ${nextSiteNames || 'none'}`);
-    }
 
     const action =
       data.status === 'disabled'

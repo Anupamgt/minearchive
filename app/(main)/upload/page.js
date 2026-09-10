@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '../../components/ToastProvider';
 import { KML_TYPES } from '../../../lib/kml';
@@ -34,20 +34,30 @@ export default function UploadPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [detectedAreas, setDetectedAreas] = useState([]);
 
+  const districts = useMemo(
+    () => (nodes || []).filter((n) => (n.status || '').toLowerCase() !== 'archived'),
+    [nodes]
+  );
+  const selectedDistrictName = districts.find((n) => n.id === nodeId)?.name || '—';
+
   useEffect(() => {
     fetch('/api/nodes', { credentials: 'same-origin' })
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
-          setNodes(data);
-          setNodeId(data[0].id);
-        } else {
-          setNodes([]);
-          setNodeId('');
-        }
+        const list = Array.isArray(data) ? data : [];
+        const open = list.filter((n) => (n.status || '').toLowerCase() !== 'archived');
+        setNodes(list);
+        setNodeId((current) => {
+          if (current && open.some((n) => n.id === current)) return current;
+          return open[0]?.id || '';
+        });
       })
       .catch(() => setNodes([]));
   }, []);
+
+  useEffect(() => {
+    setDetectedAreas((prev) => prev.map((row) => ({ ...row, node: selectedDistrictName })));
+  }, [selectedDistrictName]);
 
   const addFiles = async (fileList) => {
     const incoming = Array.from(fileList || []).filter((f) =>
@@ -73,25 +83,29 @@ export default function UploadPage() {
       // KMZ is a binary ZIP — it can't be previewed as text; it is unzipped and
       // parsed on the server at upload time.
       if (/\.kmz$/i.test(f.name)) {
-        previews.push({ polygon: f.name, status: 'KMZ · parsed on upload', node: nodes.find((n) => n.id === nodeId)?.name || '—' });
+        previews.push({
+          polygon: f.name,
+          status: 'KMZ · parsed on upload',
+          node: selectedDistrictName,
+        });
         continue;
       }
       try {
         const text = await f.text();
         const polys = previewPolygonsFromKmlText(text);
         if (polys.length === 0) {
-          previews.push({ polygon: f.name, status: 'No polygons', node: '—' });
+          previews.push({ polygon: f.name, status: 'No polygons', node: selectedDistrictName });
         } else {
           for (const p of polys) {
             previews.push({
               polygon: `${f.name} · ${p.polygon}`,
               status: p.status,
-              node: nodes.find((n) => n.id === nodeId)?.name || '—',
+              node: selectedDistrictName,
             });
           }
         }
       } catch {
-        previews.push({ polygon: f.name, status: 'Unreadable', node: '—' });
+        previews.push({ polygon: f.name, status: 'Unreadable', node: selectedDistrictName });
       }
     }
     setDetectedAreas(previews);
@@ -235,10 +249,10 @@ export default function UploadPage() {
                   onChange={(e) => setNodeId(e.target.value)}
                   required
                 >
-                  {nodes.length === 0 ? (
-                    <option value="">No assigned districts</option>
+                  {districts.length === 0 ? (
+                    <option value="">No districts yet</option>
                   ) : (
-                    nodes.map((n) => (
+                    districts.map((n) => (
                       <option key={n.id} value={n.id}>
                         {n.name}
                         {n.locationLabel ? ` — ${n.locationLabel}` : ''}
@@ -247,9 +261,9 @@ export default function UploadPage() {
                   )}
                 </select>
                 <p className="help-text">
-                  {nodes.length === 0
-                    ? 'You can only upload to sites assigned to you. Ask an administrator to assign a district.'
-                    : 'The mining boundary this file belongs to.'}
+                  {districts.length === 0
+                    ? 'No districts exist yet. An administrator must create one under Districts.'
+                    : 'Every district is listed. Select the one this survey belongs to.'}
                 </p>
               </div>
               <div className="form-group">

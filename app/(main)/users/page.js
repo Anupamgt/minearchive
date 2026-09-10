@@ -16,39 +16,6 @@ function StatusTag({ status }) {
   return <span className={`tag ${cls}`}>{(status || 'active').toUpperCase()}</span>;
 }
 
-function SiteAssignmentPicker({ nodes, selectedIds, onChange, toggleAssignedSite }) {
-  return (
-    <div className="form-group">
-      <label>Assigned sites</label>
-      {nodes.length === 0 ? (
-        <p className="help-text">No districts yet. Create one under Districts first.</p>
-      ) : (
-        <div className="site-picker" role="group" aria-label="Assigned districts">
-          {nodes.map((node) => {
-            const checked = selectedIds.includes(node.id);
-            return (
-              <label key={node.id} className={`site-picker-item${checked ? ' selected' : ''}`}>
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => onChange(toggleAssignedSite(selectedIds, node.id))}
-                />
-                <span className="site-picker-name">{node.name}</span>
-                {node.locationLabel ? (
-                  <span className="site-picker-meta">{node.locationLabel}</span>
-                ) : null}
-              </label>
-            );
-          })}
-        </div>
-      )}
-      <p className="help-text">
-        Field users only see maps, uploads and activity for the sites you tick. Admins see every site regardless.
-      </p>
-    </div>
-  );
-}
-
 export default function UsersPage() {
   const { showToast } = useToast();
   const [users, setUsers] = useState([]);
@@ -57,13 +24,11 @@ export default function UsersPage() {
   const [editing, setEditing] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [sessionUser, setSessionUser] = useState(null);
-  const [nodes, setNodes] = useState([]);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     password: '',
     role: 'User',
-    assignedNodeIds: [],
   });
 
   useEffect(() => {
@@ -86,19 +51,10 @@ export default function UsersPage() {
 
   useEffect(() => {
     fetchUsers();
-    fetch('/api/nodes', { credentials: 'same-origin' })
-      .then((res) => res.json())
-      .then((data) => setNodes(Array.isArray(data) ? data : []))
-      .catch(() => setNodes([]));
   }, []);
 
-  const toggleAssignedSite = (currentIds, nodeId) =>
-    currentIds.includes(nodeId)
-      ? currentIds.filter((id) => id !== nodeId)
-      : [...currentIds, nodeId];
-
   const resetCreateForm = () =>
-    setFormData({ name: '', email: '', password: '', role: 'User', assignedNodeIds: [] });
+    setFormData({ name: '', email: '', password: '', role: 'User' });
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -172,7 +128,6 @@ export default function UsersPage() {
       {
         name: editing.name,
         role: editing.role,
-        assignedNodeIds: editing.assignedNodeIds || [],
       },
       `Updated ${editing.name}`
     );
@@ -236,7 +191,6 @@ export default function UsersPage() {
                 <th>Name</th>
                 <th>Email</th>
                 <th>Role</th>
-                <th>Assigned sites</th>
                 <th>Status</th>
                 <th>Last login</th>
                 <th>Actions</th>
@@ -258,21 +212,6 @@ export default function UsersPage() {
                       <RoleTag role={u.role} />
                     </td>
                     <td>
-                      {(u.role || '').toLowerCase() === 'admin' ? (
-                        <span style={{ color: 'var(--muted)' }}>All sites</span>
-                      ) : (u.assignedSites || []).length === 0 ? (
-                        <span style={{ color: 'var(--muted)' }}>None</span>
-                      ) : (
-                        <div className="site-tags">
-                          {u.assignedSites.map((site) => (
-                            <span className="tag" key={site.id}>
-                              {site.name}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-                    <td>
                       <StatusTag status={u.status} />
                     </td>
                     <td style={{ color: 'var(--muted)' }}>
@@ -288,7 +227,6 @@ export default function UsersPage() {
                               id: u.id,
                               name: u.name,
                               role: u.role || 'User',
-                              assignedNodeIds: (u.assignedSites || []).map((site) => site.id),
                             })
                           }
                         >
@@ -365,14 +303,8 @@ export default function UsersPage() {
                     <option value="User">User — can upload boundary files</option>
                     <option value="Admin">Admin — full access and management</option>
                   </select>
-                  <p className="help-text">Admins can manage users and districts. Users can upload and view only their assigned sites.</p>
+                  <p className="help-text">Admins can manage users and districts. Users can sign in, pick any district, and upload KML.</p>
                 </div>
-                <SiteAssignmentPicker
-                  nodes={nodes}
-                  selectedIds={formData.assignedNodeIds}
-                  onChange={(assignedNodeIds) => setFormData({ ...formData, assignedNodeIds })}
-                  toggleAssignedSite={toggleAssignedSite}
-                />
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-outline" onClick={() => setShowModal(false)}>
@@ -418,12 +350,6 @@ export default function UsersPage() {
                     <option value="Admin">Admin — full access and management</option>
                   </select>
                 </div>
-                <SiteAssignmentPicker
-                  nodes={nodes}
-                  selectedIds={editing.assignedNodeIds || []}
-                  onChange={(assignedNodeIds) => setEditing({ ...editing, assignedNodeIds })}
-                  toggleAssignedSite={toggleAssignedSite}
-                />
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-outline" onClick={() => setEditing(null)}>

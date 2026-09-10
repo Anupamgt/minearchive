@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '../../../../../lib/db';
 import { getSessionUser, unauthorizedResponse } from '../../../../../lib/auth';
-import { canAccessNodeId, getAccessibleNodeIds } from '../../../../../lib/site-access';
 import { dateOnly, siteCodeFor } from '../../../../../lib/attribute-log';
 import { geometryToKml, sanitizeKmlFilename } from '../../../../../lib/kml';
 
@@ -40,11 +39,6 @@ export async function GET(request, { params }) {
     const row = rows[0];
     if (!row) {
       return NextResponse.json({ error: 'Site not found' }, { status: 404 });
-    }
-
-    const accessibleNodeIds = await getAccessibleNodeIds(session);
-    if (!canAccessNodeId(accessibleNodeIds, row.nodeId)) {
-      return NextResponse.json({ error: 'You do not have access to this site.' }, { status: 403 });
     }
 
     const siteCode = siteCodeFor(row.name, row.id);
