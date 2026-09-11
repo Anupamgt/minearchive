@@ -81,7 +81,16 @@ export async function PATCH(request, { params }) {
       },
     });
 
-    if (locationLabel !== undefined && locationLabel !== (existing.locationLabel || null)) {
+    if (name !== undefined && name !== existing.name) {
+      await ensureGisSchema(prisma);
+      await recordDistrictChangeForNode({
+        nodeId: node.id,
+        geometryId: geometryId || undefined,
+        oldValue: existing.name,
+        newValue: name,
+        changedBy: session.name || session.email || session.id,
+      });
+    } else if (locationLabel !== undefined && locationLabel !== (existing.locationLabel || null)) {
       await ensureGisSchema(prisma);
       await recordDistrictChangeForNode({
         nodeId: node.id,
@@ -103,6 +112,9 @@ export async function PATCH(request, { params }) {
       updatedAt: node.updatedAt,
     });
   } catch (error) {
+    if (error?.code === 'P2002') {
+      return privateJson({ error: 'A district with that name already exists.' }, { status: 409 });
+    }
     console.error('PATCH /api/nodes/[id] error:', error);
     return privateJson({ error: 'Failed to update district' }, { status: 500 });
   }

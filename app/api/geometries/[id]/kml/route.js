@@ -3,7 +3,13 @@ import { prisma } from '../../../../../lib/db';
 import { getSessionUser, unauthorizedResponse } from '../../../../../lib/auth';
 import { ensureGisSchema } from '../../../../../lib/gis-schema';
 import { dateOnly, siteCodeFor } from '../../../../../lib/attribute-log';
-import { geometryToKml, sanitizeKmlFilename } from '../../../../../lib/kml';
+import {
+  fileStem,
+  geometryToKml,
+  inspectDistrict,
+  inspectSiteName,
+  sanitizeKmlFilename,
+} from '../../../../../lib/kml';
 
 /**
  * GET /api/geometries/[id]/kml
@@ -26,9 +32,16 @@ export async function GET(request, { params }) {
         ug.id,
         ug.name,
         ug."kmlType",
+        ug."sourceProperties",
         u."surveyDate",
+        u."kmlFilePath",
         u."nodeId",
-        n."locationLabel" AS district,
+        n.name AS "nodeName",
+        n."locationLabel" AS "locationLabel",
+        (
+          SELECT COUNT(*)::int FROM "UploadGeometry" sib
+          WHERE sib."uploadId" = ug."uploadId"
+        ) AS "polygonCount",
         ST_AsGeoJSON(ug.geom)::json AS geometry
       FROM "UploadGeometry" ug
       INNER JOIN "Upload" u ON u.id = ug."uploadId"
@@ -43,11 +56,23 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: 'Site not found' }, { status: 404 });
     }
 
-    const siteCode = siteCodeFor(row.name, row.id);
+    const district = inspectDistrict({
+      nodeName: row.nodeName,
+      locationLabel: row.locationLabel,
+    });
+    const name =
+      inspectSiteName({
+        siteName: row.name,
+        kmlFilePath: row.kmlFilePath,
+        geometryId: row.id,
+        polygonCount: row.polygonCount || 1,
+        sourceProperties: row.sourceProperties,
+      }) || fileStem(row.kmlFilePath);
+    const siteCode = siteCodeFor(name, row.id);
     const filename = sanitizeKmlFilename(siteCode, row.id);
     const xml = geometryToKml({
-      name: row.name,
-      district: row.district,
+      name,
+      district,
       surveyDate: dateOnly(row.surveyDate),
       kmlType: row.kmlType,
       geometry: row.geometry,

@@ -6,7 +6,7 @@ import { prisma } from '../../../lib/db';
 import { getSessionUser, unauthorizedResponse } from '../../../lib/auth';
 import { getCachedUploads, CACHE_TAGS } from '../../../lib/cached-queries';
 import { privateJson, bustTags } from '../../../lib/cache-headers';
-import { polygonsFromGeoJson } from '../../../lib/kml';
+import { fileStem, polygonsFromGeoJson } from '../../../lib/kml';
 import { normalizeKmlType } from '../../../lib/attribute-log';
 import { ensureGisSchema } from '../../../lib/gis-schema';
 
@@ -128,7 +128,7 @@ async function processOneKmlFile({ file, nodeId, category, surveyDate, notes, km
       id,
       upload.id,
       geomJson,
-      poly.name || null,
+      poly.name || fileStem(file.name) || null,
       JSON.stringify(poly.properties || {}),
       poly.partIndex ?? 0,
       poly.partCount ?? 1,

@@ -14,12 +14,16 @@ import { colorForIndex, geoJsonPolygonToLatLngs } from '../../lib/kml';
 const CENTER = [30.97, 76.53];
 const ZOOM = 11;
 
-function FitBounds({ layers }) {
+function FitBounds({ layers, selectedUploadId }) {
   const map = useMap();
 
   useEffect(() => {
+    const selected = (layers || []).filter(
+      (layer) => selectedUploadId && layer.uploadId === selectedUploadId
+    );
+    const source = selected.length > 0 ? selected : layers;
     const latLngs = [];
-    for (const layer of layers || []) {
+    for (const layer of source || []) {
       for (const ring of layer.positions || []) {
         for (const ll of ring) latLngs.push(ll);
       }
@@ -27,7 +31,7 @@ function FitBounds({ layers }) {
     if (latLngs.length > 0) {
       map.fitBounds(latLngs, { padding: [28, 28], maxZoom: 15 });
     }
-  }, [layers, map]);
+  }, [layers, map, selectedUploadId]);
 
   return null;
 }
@@ -71,7 +75,7 @@ export default function LeafletMap({
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
 
-      <FitBounds layers={fitSource} />
+      <FitBounds layers={fitSource} selectedUploadId={selectedUploadId} />
 
       {nodeOutlines.map((node) => {
         const isSelected = selectedNode === node.id;

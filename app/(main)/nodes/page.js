@@ -37,7 +37,7 @@ function NodesPageInner() {
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [busyId, setBusyId] = useState(null);
-  const [formData, setFormData] = useState({ name: '', status: 'active', locationLabel: 'Ropar District' });
+  const [formData, setFormData] = useState({ name: '', status: 'active', locationLabel: '' });
 
   const fetchNodes = () => {
     fetch('/api/nodes', { credentials: 'same-origin' })
@@ -79,7 +79,7 @@ function NodesPageInner() {
         if (!res.ok) throw new Error(data.error || 'Create failed');
         setShowModal(false);
         showToast(`Created district: ${formData.name}`, 'success');
-        setFormData({ name: '', status: 'active', locationLabel: 'Ropar District' });
+        setFormData({ name: '', status: 'active', locationLabel: '' });
         fetchNodes();
       })
       .catch((err) => {
