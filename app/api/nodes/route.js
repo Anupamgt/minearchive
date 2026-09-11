@@ -53,6 +53,14 @@ export async function POST(request) {
 
     return privateJson(node, { status: 201 });
   } catch (error) {
+    // A duplicate node name is a client conflict, not a server failure.
+    // Handling it here (rather than a pre-check) is race-safe under concurrency.
+    if (error?.code === 'P2002') {
+      return privateJson(
+        { error: 'A monitoring area with this name already exists' },
+        { status: 409 }
+      );
+    }
     console.error('POST /api/nodes error:', error);
     return privateJson({ error: 'Failed to create node' }, { status: 500 });
   }
