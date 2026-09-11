@@ -1,6 +1,7 @@
 import { prisma } from '../../../lib/db';
 import { noStoreJson } from '../../../lib/cache-headers';
 import { ensureGisSchema } from '../../../lib/gis-schema';
+import { logger } from '../../../lib/logger';
 
 /**
  * Liveness / DB probe for Supabase + local deploys.
@@ -42,13 +43,19 @@ export async function GET(request) {
         `);
         payload.checks.gisSchema = cols?.length ? 'ok' : 'missing';
         if (!cols?.length) payload.status = 'degraded';
-      } catch {
+      } catch (err) {
         payload.status = 'degraded';
         payload.checks.gisSchema = 'error';
+        logger.error('health gis schema check failed', {
+          reason: err instanceof Error ? err.message : 'unknown',
+        });
       }
-    } catch {
+    } catch (err) {
       payload.status = 'degraded';
       payload.checks.database = 'error';
+      logger.error('health deep check failed', {
+        reason: err instanceof Error ? err.message : 'unknown',
+      });
     }
   }
 

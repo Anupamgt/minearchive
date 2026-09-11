@@ -1,0 +1,30 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "next: build (debug source maps)",
+      "type": "npm",
+      "script": "build:debug",
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "next: production start (inspect)",
+      "type": "npm",
+      "script": "start:debug",
+      "problemMatcher": [],
+      "dependsOn": ["next: build (debug source maps)"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    }
+  ]
+}

@@ -65,6 +65,30 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 Google OAuth redirect URI must be:
 `http://localhost:3000/api/auth/callback/google`
 
+## Production debugging
+
+Cursor / VS Code launch configs live in `.vscode/launch.json`:
+
+| Configuration | Use |
+|---|---|
+| **Next.js: debug server-side** | Dev server with Node inspector |
+| **Next.js: debug full stack** | Dev server + Chrome |
+| **Next.js: debug production server** | Attach inspector to `next start` |
+| **Next.js: attach to production (9229)** | Attach to a local `npm run start:debug` |
+| **Next.js: attach to Docker debug (9229)** | Attach to the Docker debug profile |
+
+```bash
+# Build + start a production server with source maps + inspector on :9229
+npm run debug:prod
+
+# Or Docker (exposes 3000 + 9229)
+docker compose --profile debug up --build app-debug
+```
+
+Health probe: `GET /api/health` (add `?deep=1` to also check the database, PostGIS, and GIS schema).
+
+Leave `ENABLE_SOURCE_MAPS` and `MINEARCHIVE_DEBUG` unset on public production — they are for local/staging debugging only.
+
 ## Supabase (production database)
 
 1. Create a free project at [supabase.com/dashboard](https://supabase.com/dashboard).

@@ -11,6 +11,7 @@ milestone: `git checkout v0.4.0`.
 ## [Unreleased]
 
 ### Added
+- Production debugging setup: VS Code/Cursor launch configs, `lib/logger.js`, `npm run debug:prod`, Docker `app-debug` profile (inspector on :9229). Leave `ENABLE_SOURCE_MAPS` / `MINEARCHIVE_DEBUG` unset on public Vercel.
 - GIS attribute table on the map inspect card: Site name/code, District (`Node.locationLabel`), Survey date, optional KML type (`Proposed` / `New` / `Previous`).
 - App applies `UploadGeometry.kmlType` + `AttributeChangeLog` on first GIS request so production does not depend on a manual SQL paste.
 - `AttributeChangeLog` plus Maps sidebar Activity Log (`GET /api/map/activity-log?site=`). Deep link `/map?site=SITE-042`. Not `/audit`.
