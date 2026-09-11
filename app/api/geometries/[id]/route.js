@@ -1,5 +1,6 @@
 import { prisma } from '../../../../lib/db';
 import { getSessionUser, unauthorizedResponse, forbiddenResponse } from '../../../../lib/auth';
+import { ensureGisSchema } from '../../../../lib/gis-schema';
 import { CACHE_TAGS } from '../../../../lib/cached-queries';
 import { privateJson, bustTags } from '../../../../lib/cache-headers';
 import {
@@ -21,6 +22,7 @@ export async function PATCH(request, { params }) {
   if (session.role?.toLowerCase() !== 'admin') return forbiddenResponse();
 
   try {
+    await ensureGisSchema(prisma);
     const { id } = await params;
     if (!id) {
       return privateJson({ error: 'Geometry id is required' }, { status: 400 });

@@ -1,5 +1,6 @@
 import { prisma } from '../../../lib/db';
 import { noStoreJson } from '../../../lib/cache-headers';
+import { ensureGisSchema } from '../../../lib/gis-schema';
 
 /**
  * Liveness / DB probe for Supabase + local deploys.
@@ -29,6 +30,21 @@ export async function GET(request) {
         if (rows?.[0]?.version) payload.postgisVersion = String(rows[0].version);
       } catch {
         payload.checks.postgis = 'missing';
+      }
+      try {
+        await ensureGisSchema(prisma);
+        const cols = await prisma.$queryRawUnsafe(`
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'UploadGeometry'
+            AND column_name = 'kmlType'
+        `);
+        payload.checks.gisSchema = cols?.length ? 'ok' : 'missing';
+        if (!cols?.length) payload.status = 'degraded';
+      } catch {
+        payload.status = 'degraded';
+        payload.checks.gisSchema = 'error';
       }
     } catch {
       payload.status = 'degraded';

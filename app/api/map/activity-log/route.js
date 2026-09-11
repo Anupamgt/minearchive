@@ -2,6 +2,7 @@ import { prisma } from '../../../../lib/db';
 import { getSessionUser, unauthorizedResponse } from '../../../../lib/auth';
 import { privateJson } from '../../../../lib/cache-headers';
 import { serializeLogEntry } from '../../../../lib/attribute-log';
+import { ensureGisSchema } from '../../../../lib/gis-schema';
 
 /**
  * GET /api/map/activity-log?site=&geometryId=&limit=
@@ -12,6 +13,7 @@ export async function GET(request) {
   if (!session) return unauthorizedResponse();
 
   try {
+    await ensureGisSchema(prisma);
     const { searchParams } = new URL(request.url);
     const site = (searchParams.get('site') || '').trim();
     const geometryId = (searchParams.get('geometryId') || '').trim();

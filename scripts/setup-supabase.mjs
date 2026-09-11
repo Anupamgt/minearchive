@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { PrismaClient } from '@prisma/client';
 import { lockPostgisCatalog } from './lock-postgis-catalog.mjs';
+import { applyGisAttributes } from './ensure-gis-schema.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
@@ -143,6 +144,14 @@ try {
   console.log('  Index OK');
 } catch (err) {
   console.warn(`  Index skipped: ${err.message}`);
+}
+
+try {
+  console.log('→ Ensuring GIS attributes (kmlType + AttributeChangeLog)…');
+  await applyGisAttributes(prisma2);
+  console.log('  GIS attributes OK');
+} catch (err) {
+  console.warn(`  GIS attributes skipped: ${err.message}`);
 } finally {
   await prisma2.$disconnect().catch(() => {});
 }

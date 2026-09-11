@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '../../../../../lib/db';
 import { getSessionUser, unauthorizedResponse } from '../../../../../lib/auth';
+import { ensureGisSchema } from '../../../../../lib/gis-schema';
 import { dateOnly, siteCodeFor } from '../../../../../lib/attribute-log';
 import { geometryToKml, sanitizeKmlFilename } from '../../../../../lib/kml';
 
@@ -13,6 +14,7 @@ export async function GET(request, { params }) {
   if (!session) return unauthorizedResponse();
 
   try {
+    await ensureGisSchema(prisma);
     const { id } = await params;
     if (!id) {
       return NextResponse.json({ error: 'Geometry id is required' }, { status: 400 });

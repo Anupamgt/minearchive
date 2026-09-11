@@ -1,5 +1,6 @@
 -- GIS attribute table + Maps activity log (Workstreams A–B).
--- Paste into the Supabase SQL Editor and Run. Safe to re-run.
+-- The app also applies this on GIS API requests (`lib/gis-schema.js`)
+-- and via `npm run db:gis`. Safe to re-run.
 -- Use the direct connection (port 5432) if you run this via psql.
 --
 -- Does NOT drop UserSiteAssignment.

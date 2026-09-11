@@ -8,6 +8,7 @@ import { getCachedUploads, CACHE_TAGS } from '../../../lib/cached-queries';
 import { privateJson, bustTags } from '../../../lib/cache-headers';
 import { polygonsFromGeoJson } from '../../../lib/kml';
 import { normalizeKmlType } from '../../../lib/attribute-log';
+import { ensureGisSchema } from '../../../lib/gis-schema';
 
 /**
  * Read the KML text out of an uploaded file, transparently handling KMZ.
@@ -97,6 +98,7 @@ async function processOneKmlFile({ file, nodeId, category, surveyDate, notes, km
   });
 
   let parsedFeatures = 0;
+  await ensureGisSchema(prisma);
   for (const poly of polygons) {
     const geomJson = JSON.stringify({
       type: 'Polygon',
@@ -177,6 +179,8 @@ export async function POST(request) {
         { status: 400 }
       );
     }
+    await ensureGisSchema(prisma);
+
     const uploadedBy = session.name;
     const resolvedNodeId = nodeId ? String(nodeId) : null;
     if (!resolvedNodeId) {

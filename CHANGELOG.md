@@ -12,6 +12,7 @@ milestone: `git checkout v0.4.0`.
 
 ### Added
 - GIS attribute table on the map inspect card: Site name/code, District (`Node.locationLabel`), Survey date, optional KML type (`Proposed` / `New` / `Previous`).
+- App applies `UploadGeometry.kmlType` + `AttributeChangeLog` on first GIS request so production does not depend on a manual SQL paste.
 - `AttributeChangeLog` plus Maps sidebar Activity Log (`GET /api/map/activity-log?site=`). Deep link `/map?site=SITE-042`. Not `/audit`.
 - Per-site KML download (`GET /api/geometries/[id]/kml`) reconstructed from PostGIS + attributes.
 - Admin `PATCH /api/geometries/[id]` for name, kmlType, and parent survey date.
@@ -21,7 +22,7 @@ milestone: `git checkout v0.4.0`.
 - Field users sign in with email and pick any existing district on Upload. Site assignment is no longer enforced or shown.
 
 ### Notes
-- Run `prisma/sql/02_gis_attributes.sql` in the Supabase SQL Editor (or `npx prisma db push`) so `UploadGeometry.kmlType` and `AttributeChangeLog` exist. Do not drop `UserSiteAssignment`. Do not enable RLS on `spatial_ref_sys`.
+- `UploadGeometry.kmlType` and `AttributeChangeLog` are created automatically on GIS API requests (and via `npm run db:gis` / `prisma/sql/02_gis_attributes.sql`). Do not drop `UserSiteAssignment`. Do not enable RLS on `spatial_ref_sys`.
 - `UserSiteAssignment` may still exist in the database; the app no longer reads or writes it.
 
 ### Security

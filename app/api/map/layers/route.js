@@ -1,6 +1,7 @@
 import { prisma } from '../../../../lib/db';
 import { getSessionUser, unauthorizedResponse } from '../../../../lib/auth';
 import { privateJson } from '../../../../lib/cache-headers';
+import { ensureGisSchema } from '../../../../lib/gis-schema';
 
 /**
  * GeoJSON FeatureCollection of stored KML polygons.
@@ -13,6 +14,7 @@ export async function GET(request) {
   if (!session) return unauthorizedResponse();
 
   try {
+    await ensureGisSchema(prisma);
     const { searchParams } = new URL(request.url);
     const nodeId = searchParams.get('nodeId');
     const uploadIdsParam = searchParams.get('uploadIds');

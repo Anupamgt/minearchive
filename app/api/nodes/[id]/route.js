@@ -1,5 +1,6 @@
 import { prisma } from '../../../../lib/db';
 import { getSessionUser, unauthorizedResponse, forbiddenResponse } from '../../../../lib/auth';
+import { ensureGisSchema } from '../../../../lib/gis-schema';
 import { CACHE_TAGS } from '../../../../lib/cached-queries';
 import { privateJson, bustTags } from '../../../../lib/cache-headers';
 import { normalizeOptionalString, recordDistrictChangeForNode } from '../../../../lib/attribute-log';
@@ -81,6 +82,7 @@ export async function PATCH(request, { params }) {
     });
 
     if (locationLabel !== undefined && locationLabel !== (existing.locationLabel || null)) {
+      await ensureGisSchema(prisma);
       await recordDistrictChangeForNode({
         nodeId: node.id,
         geometryId: geometryId || undefined,
