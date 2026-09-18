@@ -4,6 +4,25 @@
 
 A web-based application for monitoring changes in mining areas through KML boundary file uploads, map visualization, and historical tracking.
 
+Current release: **[v1.0.0](CHANGELOG.md#100--2026-08-25)**. History from the MVP onward is tagged and listed in [CHANGELOG.md](CHANGELOG.md).
+
+```bash
+git checkout v0.1.0   # original MVP
+git checkout v0.4.0   # real multi-layer GIS
+git checkout v1.0.0   # site names + file inspect card
+```
+
+| Version | When | What landed |
+|---------|------|-------------|
+| [0.1.0](CHANGELOG.md#010--2026-06-19) | 2026-06-19 | MVP |
+| [0.2.0](CHANGELOG.md#020--2026-06-28) | 2026-06-28 | Backend, PostGIS, Leaflet map, first polish |
+| [0.3.0](CHANGELOG.md#030--2026-08-08) | 2026-08-08 | Google OAuth, Supabase, Vercel |
+| [0.4.0](CHANGELOG.md#040--2026-08-12) | 2026-08-12 | Real KML/KMZ geometries, multi-layer map |
+| [0.5.0](CHANGELOG.md#050--2026-08-12) | 2026-08-12 | Professional map-centric UI |
+| [0.6.0](CHANGELOG.md#060--2026-08-12) | 2026-08-12 | Archive, users, breach, and other actions persist |
+| [0.7.0](CHANGELOG.md#070--2026-08-16) | 2026-08-16 | System design docs |
+| [1.0.0](CHANGELOG.md#100--2026-08-25) | 2026-08-25 | Per-site names and file inspect card |
+
 ## Features
 
 - **KML Upload & Parsing** — Upload KML/KMZ files with multi-polygon support, auto-matching to existing mining nodes
@@ -11,18 +30,22 @@ A web-based application for monitoring changes in mining areas through KML bound
 - **Change Detection** — Automated boundary diff metrics (area change, perimeter change) + visual polygon overlay comparison
 - **Audit Trail** — Immutable compliance logging of all system actions
 - **PDF Reports** — Per-node history export for external stakeholders
-- **Role-Based Access** — Central Administrator (full access) and Field Users (upload + view)
+- **Role-Based Access** — Central Administrator (manage users and districts) and Field Users (sign in with email, pick a district, upload KML)
 
-## Tech Stack
+## Architecture
+
+See **[docs/system-design.md](docs/system-design.md)** for the container diagram,
+auth flow, KML ingestion pipeline, data model, and deployment topology.
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | Next.js (App Router) + Vanilla CSS |
-| Map | ArcGIS JavaScript SDK / Leaflet.js |
-| Backend | Next.js API Routes |
-| Database | PostgreSQL + PostGIS (local Docker or **Supabase**) |
-| File Storage | Cloud Object Storage (S3/GCS) |
-| Auth | Google OAuth + email/password session cookie |
+| Frontend | Next.js 16 (App Router) + Vanilla CSS |
+| Map | Leaflet.js via react-leaflet, OpenStreetMap tiles |
+| Backend | Next.js Route Handlers |
+| Database | PostgreSQL + PostGIS (Supabase, local Docker, or [Oracle Always Free](docs/oracle-cloud-postgis.md)) |
+| ORM | Prisma, with raw SQL for PostGIS geometry |
+| Auth | Google OAuth + HMAC-signed session cookie |
+| Hosting | Vercel (Dockerfile provided for self-hosting) |
 
 ## Getting Started
 
@@ -42,6 +65,30 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 Google OAuth redirect URI must be:
 `http://localhost:3000/api/auth/callback/google`
 
+## Production debugging
+
+Cursor / VS Code launch configs live in `.vscode/launch.json`:
+
+| Configuration | Use |
+|---|---|
+| **Next.js: debug server-side** | Dev server with Node inspector |
+| **Next.js: debug full stack** | Dev server + Chrome |
+| **Next.js: debug production server** | Attach inspector to `next start` |
+| **Next.js: attach to production (9229)** | Attach to a local `npm run start:debug` |
+| **Next.js: attach to Docker debug (9229)** | Attach to the Docker debug profile |
+
+```bash
+# Build + start a production server with source maps + inspector on :9229
+npm run debug:prod
+
+# Or Docker (exposes 3000 + 9229)
+docker compose --profile debug up --build app-debug
+```
+
+Health probe: `GET /api/health` (add `?deep=1` to also check the database, PostGIS, and GIS schema).
+
+Leave `ENABLE_SOURCE_MAPS` and `MINEARCHIVE_DEBUG` unset on public production — they are for local/staging debugging only.
+
 ## Supabase (production database)
 
 1. Create a free project at [supabase.com/dashboard](https://supabase.com/dashboard).
@@ -57,7 +104,11 @@ npm run db:supabase
 
 That enables PostGIS, pushes the Prisma schema, and creates a GIST index on `UploadGeometry.geom`.
 
+Hosted Supabase Security Advisor may flag `public.spatial_ref_sys` as “RLS Disabled in Public”. That table is the PostGIS EPSG catalog, owned by `supabase_admin`, so you **cannot** enable RLS from the SQL Editor. It is safe to ignore. If you want to try locking the Data API anyway, run `prisma/sql/01_lock_postgis_catalog.sql` (it skips `ENABLE RLS` when you are not the owner).
+
 Smoke test: `GET /api/health?deep=1` should return `"database":"ok"`.
+
+Free/cheap hosts if you want to leave Supabase: **[docs/database-hosting-alternatives.md](docs/database-hosting-alternatives.md)**. Neon is the usual hosted free pick; local Docker is already in this repo. For a free VM that does not pause, see **[Oracle Cloud Always Free + PostGIS](docs/oracle-cloud-postgis.md)**.
 
 ## Deploy to Vercel (dashboard only — no CLI)
 

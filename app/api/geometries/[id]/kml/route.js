@@ -1,32 +1,88 @@
 import { NextResponse } from 'next/server';
+import { prisma } from '../../../../../lib/db';
 import { getSessionUser, unauthorizedResponse } from '../../../../../lib/auth';
-import { loadGeometryFeatures } from '../../../../../lib/geometry-query';
-import { geoJsonFeaturesToKml, safeKmlFilename } from '../../../../../lib/kml';
+import { ensureGisSchema } from '../../../../../lib/gis-schema';
+import { dateOnly, siteCodeFor } from '../../../../../lib/attribute-log';
+import {
+  fileStem,
+  geometryToKml,
+  inspectDistrict,
+  inspectSiteName,
+  sanitizeKmlFilename,
+} from '../../../../../lib/kml';
 
 /**
- * Download a single stored feature as its own KML file.
- * GET /api/geometries/:id/kml
+ * GET /api/geometries/[id]/kml
+ * Reconstruct a single stored feature + Site Name, District, Survey Date, KML Type.
  */
 export async function GET(request, { params }) {
   const session = await getSessionUser(request);
   if (!session) return unauthorizedResponse();
 
-  const { id } = await params;
   try {
-    const features = await loadGeometryFeatures({ geometryIds: [id] });
-    if (features.length === 0) {
-      return NextResponse.json({ error: 'Feature not found' }, { status: 404 });
+    await ensureGisSchema(prisma);
+    const { id } = await params;
+    if (!id) {
+      return NextResponse.json({ error: 'Geometry id is required' }, { status: 400 });
     }
 
-    const name = features[0].properties?.name || 'feature';
-    const fileName = safeKmlFilename(name);
-    const kml = geoJsonFeaturesToKml(features, name);
+    const rows = await prisma.$queryRawUnsafe(
+      `
+      SELECT
+        ug.id,
+        ug.name,
+        ug."kmlType",
+        ug."sourceProperties",
+        u."surveyDate",
+        u."kmlFilePath",
+        u."nodeId",
+        n.name AS "nodeName",
+        n."locationLabel" AS "locationLabel",
+        (
+          SELECT COUNT(*)::int FROM "UploadGeometry" sib
+          WHERE sib."uploadId" = ug."uploadId"
+        ) AS "polygonCount",
+        ST_AsGeoJSON(ug.geom)::json AS geometry
+      FROM "UploadGeometry" ug
+      INNER JOIN "Upload" u ON u.id = ug."uploadId"
+      LEFT JOIN "Node" n ON n.id = u."nodeId"
+      WHERE ug.id = $1 AND u."isDeleted" = false AND ug.geom IS NOT NULL
+      `,
+      id
+    );
 
-    return new NextResponse(kml, {
+    const row = rows[0];
+    if (!row) {
+      return NextResponse.json({ error: 'Site not found' }, { status: 404 });
+    }
+
+    const district = inspectDistrict({
+      nodeName: row.nodeName,
+      locationLabel: row.locationLabel,
+    });
+    const name =
+      inspectSiteName({
+        siteName: row.name,
+        kmlFilePath: row.kmlFilePath,
+        geometryId: row.id,
+        polygonCount: row.polygonCount || 1,
+        sourceProperties: row.sourceProperties,
+      }) || fileStem(row.kmlFilePath);
+    const siteCode = siteCodeFor(name, row.id);
+    const filename = sanitizeKmlFilename(siteCode, row.id);
+    const xml = geometryToKml({
+      name,
+      district,
+      surveyDate: dateOnly(row.surveyDate),
+      kmlType: row.kmlType,
+      geometry: row.geometry,
+    });
+
+    return new NextResponse(xml, {
       status: 200,
       headers: {
         'Content-Type': 'application/vnd.google-earth.kml+xml; charset=utf-8',
-        'Content-Disposition': `attachment; filename="${fileName}"`,
+        'Content-Disposition': `attachment; filename="${filename}"`,
         'Cache-Control': 'private, no-store',
       },
     });

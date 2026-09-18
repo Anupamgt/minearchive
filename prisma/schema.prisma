@@ -20,8 +20,9 @@ model User {
   lastLogin    DateTime?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
-  
-  auditLogs    AuditLog[]
+
+  auditLogs     AuditLog[]
+  assignedSites UserSiteAssignment[]
 }
 
 model Node {
@@ -36,6 +37,21 @@ model Node {
   updatedAt     DateTime  @updatedAt
 
   uploads       Upload[]
+  assignedUsers UserSiteAssignment[]
+}
+
+/// Legacy table. The app no longer reads or writes assignments.
+/// Keep the table in the database — do not DROP it.
+model UserSiteAssignment {
+  userId     String
+  nodeId     String
+  assignedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  node Node @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@id([userId, nodeId])
+  @@index([nodeId])
 }
 
 model Upload {
@@ -65,12 +81,26 @@ model UploadGeometry {
   uploadId        String
   upload          Upload   @relation(fields: [uploadId], references: [id])
 
+  // Mixed Geometry so KML polylines and points can be stored with polygons.
   geom            Unsupported("geometry(Geometry, 4326)")?
+
+  // Placemark name from the KML. Null when the source had no usable name.
   name            String?
-  geomType        String?  // Polygon | LineString | Point
+  geomType        String? // Polygon | LineString | Point
+  // Every other KML attribute (ExtendedData etc). Kept verbatim so the display
+  // name can be re-derived later without re-uploading the original file.
+  sourceProperties Json?
+  // Position within a placemark that produced several geometries (MultiGeometry).
+  partIndex       Int?
+  partCount       Int?
 
   areaHectares    Float?
   perimeterMeters Float?
+
+  // Optional site classification for GIS exports: Proposed | New | Previous.
+  kmlType         String?
+
+  attributeChanges AttributeChangeLog[]
 }
 
 model UploadAttachment {
@@ -93,4 +123,23 @@ model AuditLog {
   details    String?
   ipAddress  String?
   timestamp  DateTime @default(now())
+}
+
+/// Attribute-level change trail for the Maps GIS Activity Log.
+/// Written only from PATCH paths (geometry attributes + district).
+/// Do not reuse /audit for this contract.
+model AttributeChangeLog {
+  id           String   @id @default(uuid())
+  siteCode     String
+  geometryId   String
+  geometry     UploadGeometry @relation(fields: [geometryId], references: [id], onDelete: Cascade)
+  fieldChanged String
+  oldValue     String?
+  newValue     String?
+  changedBy    String
+  changedAt    DateTime @default(now())
+
+  @@index([siteCode])
+  @@index([geometryId])
+  @@index([changedAt])
 }

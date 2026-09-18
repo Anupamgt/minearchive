@@ -1,19 +1,34 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '../../components/ToastProvider';
+import { KML_TYPES } from '../../../lib/kml';
 import './upload.css';
+
+function localTagCount(node, localName) {
+  return Array.from(node.getElementsByTagName('*')).filter((el) => {
+    const local = el.localName || String(el.tagName || '').split(':').pop();
+    return local === localName;
+  }).length;
+}
 
 function previewFeaturesFromKmlText(text) {
   try {
     const doc = new DOMParser().parseFromString(text, 'text/xml');
-    const placemarks = Array.from(doc.getElementsByTagName('Placemark'));
+    const placemarks = Array.from(doc.getElementsByTagName('*')).filter((el) => {
+      const local = el.localName || String(el.tagName || '').split(':').pop();
+      return local === 'Placemark';
+    });
     return placemarks.map((pm, idx) => {
-      const name = pm.getElementsByTagName('name')[0]?.textContent?.trim() || '';
-      const hasPolygon = pm.getElementsByTagName('Polygon').length > 0;
-      const hasLine = pm.getElementsByTagName('LineString').length > 0;
-      const hasPoint = pm.getElementsByTagName('Point').length > 0;
+      const nameEl = Array.from(pm.getElementsByTagName('*')).find((el) => {
+        const local = el.localName || String(el.tagName || '').split(':').pop();
+        return local === 'name' && el.parentNode === pm;
+      });
+      const name = nameEl?.textContent?.trim() || '';
+      const hasPolygon = localTagCount(pm, 'Polygon') > 0;
+      const hasLine = localTagCount(pm, 'LineString') > 0 || localTagCount(pm, 'Track') > 0;
+      const hasPoint = localTagCount(pm, 'Point') > 0;
       let kind = 'Feature';
       if (hasPolygon) kind = 'Polygon';
       else if (hasLine) kind = 'Polyline';
@@ -37,23 +52,36 @@ export default function UploadPage() {
   const [nodes, setNodes] = useState([]);
   const [nodeId, setNodeId] = useState('');
   const [surveyDate, setSurveyDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [category, setCategory] = useState('Routine Survey');
+  const [kmlType, setKmlType] = useState('');
   const [notes, setNotes] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [detectedAreas, setDetectedAreas] = useState([]);
 
+  const districts = useMemo(
+    () => (nodes || []).filter((n) => (n.status || '').toLowerCase() !== 'archived'),
+    [nodes]
+  );
+  const selectedDistrictName = districts.find((n) => n.id === nodeId)?.name || '—';
+
   useEffect(() => {
     fetch('/api/nodes', { credentials: 'same-origin' })
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
-          setNodes(data);
-          setNodeId(data[0].id);
-        }
+        const list = Array.isArray(data) ? data : [];
+        const open = list.filter((n) => (n.status || '').toLowerCase() !== 'archived');
+        setNodes(list);
+        setNodeId((current) => {
+          if (current && open.some((n) => n.id === current)) return current;
+          return open[0]?.id || '';
+        });
       })
       .catch(() => setNodes([]));
   }, []);
+
+  useEffect(() => {
+    setDetectedAreas((prev) => prev.map((row) => ({ ...row, node: selectedDistrictName })));
+  }, [selectedDistrictName]);
 
   const addFiles = async (fileList) => {
     const incoming = Array.from(fileList || []).filter((f) =>
@@ -79,25 +107,29 @@ export default function UploadPage() {
       // KMZ is a binary ZIP — it can't be previewed as text; it is unzipped and
       // parsed on the server at upload time.
       if (/\.kmz$/i.test(f.name)) {
-        previews.push({ polygon: f.name, status: 'KMZ · parsed on upload', node: nodes.find((n) => n.id === nodeId)?.name || '—' });
+        previews.push({
+          polygon: f.name,
+          status: 'KMZ · parsed on upload',
+          node: selectedDistrictName,
+        });
         continue;
       }
       try {
         const text = await f.text();
         const features = previewFeaturesFromKmlText(text);
         if (features.length === 0) {
-          previews.push({ polygon: f.name, status: 'No features', node: '—' });
+          previews.push({ polygon: f.name, status: 'No features', node: selectedDistrictName });
         } else {
           for (const p of features) {
             previews.push({
               polygon: `${f.name} · ${p.polygon}`,
               status: p.status,
-              node: nodes.find((n) => n.id === nodeId)?.name || '—',
+              node: selectedDistrictName,
             });
           }
         }
       } catch {
-        previews.push({ polygon: f.name, status: 'Unreadable', node: '—' });
+        previews.push({ polygon: f.name, status: 'Unreadable', node: selectedDistrictName });
       }
     }
     setDetectedAreas(previews);
@@ -127,7 +159,7 @@ export default function UploadPage() {
       return;
     }
     if (!nodeId) {
-      showToast('Choose a monitoring area (create one under Monitoring Areas if the list is empty).', 'warning');
+      showToast('Choose a district (create one under Districts if the list is empty).', 'warning');
       return;
     }
 
@@ -136,7 +168,7 @@ export default function UploadPage() {
     for (const f of files) formData.append('files', f);
     formData.append('nodeId', nodeId);
     formData.append('surveyDate', surveyDate);
-    formData.append('category', category);
+    if (kmlType) formData.append('kmlType', kmlType);
     formData.append('notes', notes);
 
     try {
@@ -172,7 +204,7 @@ export default function UploadPage() {
         <div>
           <h1>Upload Boundary File</h1>
           <p className="page-subtitle">
-            Add a KML or KMZ file to a monitoring area. Polygons, polylines, and points are archived as a dated survey and shown on the map.
+            Add a KML or KMZ file to a district. Polygons, polylines, and points are archived as a dated survey and shown on the map.
           </p>
         </div>
       </div>
@@ -234,24 +266,29 @@ export default function UploadPage() {
 
             <div className="upload-grid">
               <div className="form-group">
-                <label className="required" htmlFor="upload-node">Monitoring area</label>
+                <label className="required" htmlFor="upload-node">District</label>
                 <select
                   id="upload-node"
                   value={nodeId}
                   onChange={(e) => setNodeId(e.target.value)}
                   required
                 >
-                  {nodes.length === 0 ? (
-                    <option value="">No areas yet — create one first</option>
+                  {districts.length === 0 ? (
+                    <option value="">No districts yet</option>
                   ) : (
-                    nodes.map((n) => (
+                    districts.map((n) => (
                       <option key={n.id} value={n.id}>
                         {n.name}
+                        {n.locationLabel ? ` — ${n.locationLabel}` : ''}
                       </option>
                     ))
                   )}
                 </select>
-                <p className="help-text">The mining boundary this file belongs to.</p>
+                <p className="help-text">
+                  {districts.length === 0
+                    ? 'No districts exist yet. An administrator must create one under Districts.'
+                    : 'Every district is listed. Select the one this survey belongs to.'}
+                </p>
               </div>
               <div className="form-group">
                 <label htmlFor="upload-date">Survey date</label>
@@ -266,16 +303,22 @@ export default function UploadPage() {
             </div>
 
             <div className="form-group">
-              <label htmlFor="upload-category">Survey type</label>
+              <label htmlFor="upload-kml-type">KML type</label>
               <select
-                id="upload-category"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
+                id="upload-kml-type"
+                value={kmlType}
+                onChange={(e) => setKmlType(e.target.value)}
               >
-                <option value="Routine Survey">Routine Survey (scheduled monitoring)</option>
-                <option value="Encroachment Report">Encroachment Report (boundary breach)</option>
-                <option value="Restoration Check">Restoration Check (post-mining audit)</option>
+                <option value="">None (optional)</option>
+                {KML_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
               </select>
+              <p className="help-text">
+                Optional default applied to every feature in this file. You can change it later per site.
+              </p>
             </div>
 
             <div className="form-group">
@@ -305,7 +348,7 @@ export default function UploadPage() {
                   <tr>
                     <th>Boundary</th>
                     <th>Status</th>
-                    <th>Monitoring area</th>
+                    <th>District</th>
                   </tr>
                 </thead>
                 <tbody>

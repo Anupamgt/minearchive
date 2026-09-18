@@ -34,7 +34,7 @@ export async function POST(request) {
         name,
         description,
         status: status || 'proposed',
-        locationLabel: locationLabel || 'Ropar District',
+        locationLabel: locationLabel || name,
         createdBy: session.name,
       },
     });

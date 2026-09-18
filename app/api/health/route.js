@@ -1,5 +1,7 @@
 import { prisma } from '../../../lib/db';
 import { noStoreJson } from '../../../lib/cache-headers';
+import { ensureGisSchema } from '../../../lib/gis-schema';
+import { logger } from '../../../lib/logger';
 
 /**
  * Liveness / DB probe for Supabase + local deploys.
@@ -30,9 +32,30 @@ export async function GET(request) {
       } catch {
         payload.checks.postgis = 'missing';
       }
-    } catch {
+      try {
+        await ensureGisSchema(prisma);
+        const cols = await prisma.$queryRawUnsafe(`
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'UploadGeometry'
+            AND column_name = 'kmlType'
+        `);
+        payload.checks.gisSchema = cols?.length ? 'ok' : 'missing';
+        if (!cols?.length) payload.status = 'degraded';
+      } catch (err) {
+        payload.status = 'degraded';
+        payload.checks.gisSchema = 'error';
+        logger.error('health gis schema check failed', {
+          reason: err instanceof Error ? err.message : 'unknown',
+        });
+      }
+    } catch (err) {
       payload.status = 'degraded';
       payload.checks.database = 'error';
+      logger.error('health deep check failed', {
+        reason: err instanceof Error ? err.message : 'unknown',
+      });
     }
   }
 

@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import JSZip from 'jszip';
+import { prisma } from '../../../../lib/db';
 import { getSessionUser, unauthorizedResponse } from '../../../../lib/auth';
 import { loadGeometryFeatures } from '../../../../lib/geometry-query';
 import { geoJsonFeaturesToKml, safeKmlFilename } from '../../../../lib/kml';
+import { ensureGisSchema } from '../../../../lib/gis-schema';
 
 /**
  * Export ticked uploads as one combined KML, or as a ZIP of per-file KMLs.
@@ -24,6 +26,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Select at least one file' }, { status: 400 });
     }
 
+    await ensureGisSchema(prisma);
     const features = await loadGeometryFeatures({ uploadIds });
     if (features.length === 0) {
       return NextResponse.json({ error: 'No features found for the selected files' }, { status: 404 });

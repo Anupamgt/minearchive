@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { Suspense, useState, useEffect } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { readSessionFromCookie } from '../../lib/session-client';
 import './layout.css';
@@ -94,6 +94,22 @@ const ICONS = {
       <line x1="9" y1="18" x2="13" y2="18" />
     </svg>
   ),
+  reviews: (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  ),
   users: (
     <svg
       width="20"
@@ -118,12 +134,53 @@ const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: ICONS.dashboard },
   { href: '/map', label: 'Map', icon: ICONS.map },
   { href: '/upload', label: 'Upload Boundary', icon: ICONS.upload },
-  { href: '/nodes', label: 'Monitoring Areas', icon: ICONS.nodes },
-  { href: '/audit', label: 'Activity Log', icon: ICONS.audit },
-  { href: '/users', label: 'Users', icon: ICONS.users },
+  { href: '/nodes', label: 'Districts', icon: ICONS.nodes, adminOnly: true },
+  {
+    href: '/nodes?status=proposed',
+    label: 'Reviews',
+    icon: ICONS.reviews,
+    adminOnly: true,
+    match: 'reviews',
+  },
+  { href: '/audit', label: 'Activity Log', icon: ICONS.audit, adminOnly: true },
+  { href: '/users', label: 'Users', icon: ICONS.users, adminOnly: true },
 ];
 
-const FALLBACK_USER = { name: 'Central Admin', role: 'admin' };
+function navItemIsActive(item, pathname, status) {
+  if (item.match === 'reviews') {
+    return pathname === '/nodes' && status === 'proposed';
+  }
+  if (item.href === '/nodes') {
+    return pathname === '/nodes' && status !== 'proposed';
+  }
+  return pathname === item.href;
+}
+
+function SidebarNav({ collapsed, isAdmin }) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const status = searchParams.get('status');
+  const visibleNav = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
+
+  return (
+    <div className="sidebar-nav">
+      {visibleNav.map((item) => (
+        <Link
+          key={item.href}
+          href={item.href}
+          title={item.label}
+          className={`sidebar-link ${navItemIsActive(item, pathname, status) ? 'active' : ''}`}
+        >
+          <span className="sidebar-indicator" aria-hidden="true" />
+          <span className="sidebar-icon">{item.icon}</span>
+          {!collapsed && <span className="sidebar-label">{item.label}</span>}
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+const FALLBACK_USER = { name: '', role: '' };
 
 function getInitials(name) {
   if (!name) return '?';
@@ -134,7 +191,6 @@ function getInitials(name) {
 }
 
 export default function MainLayout({ children }) {
-  const pathname = usePathname();
   const router = useRouter();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [user, setUser] = useState(FALLBACK_USER);
@@ -152,7 +208,8 @@ export default function MainLayout({ children }) {
     router.push('/login');
   };
 
-  const roleTagClass = user.role === 'admin' ? 'tag tag-accent' : 'tag tag-green';
+  const isAdmin = (user.role || '').toLowerCase() === 'admin';
+  const roleTagClass = isAdmin ? 'tag tag-accent' : 'tag tag-green';
 
   return (
     <div className="app-shell">
@@ -227,26 +284,13 @@ export default function MainLayout({ children }) {
       <div className="app-body">
         {/* Sidebar */}
         <nav className={`app-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
-          <div className="sidebar-nav">
-            {NAV_ITEMS.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                title={item.label}
-                className={`sidebar-link ${pathname === item.href ? 'active' : ''}`}
-              >
-                <span className="sidebar-indicator" aria-hidden="true" />
-                <span className="sidebar-icon">{item.icon}</span>
-                {!sidebarCollapsed && (
-                  <span className="sidebar-label">{item.label}</span>
-                )}
-              </Link>
-            ))}
-          </div>
+          <Suspense fallback={<div className="sidebar-nav" />}>
+            <SidebarNav collapsed={sidebarCollapsed} isAdmin={isAdmin} />
+          </Suspense>
 
           {!sidebarCollapsed && (
             <div className="sidebar-footer">
-              <span className="tag">MineArchive v1.0</span>
+              <span className="tag">MineArchive v1.0.0</span>
             </div>
           )}
         </nav>

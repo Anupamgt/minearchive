@@ -15,6 +15,9 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED 1
 ENV NODE_ENV production
+# Pass ENABLE_SOURCE_MAPS=true for debug images (see docker compose profile "debug")
+ARG ENABLE_SOURCE_MAPS=false
+ENV ENABLE_SOURCE_MAPS=$ENABLE_SOURCE_MAPS
 # Prisma schema references DATABASE_URL + DIRECT_URL; generate does not connect.
 ENV DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres"
 ENV DIRECT_URL="postgresql://postgres:postgres@localhost:5432/postgres"
@@ -39,5 +42,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 
 USER nextjs
 EXPOSE 3000
+# 9229 is only used when NODE_OPTIONS includes --inspect (debug compose profile)
+EXPOSE 9229
 
 CMD ["node", "server.js"]

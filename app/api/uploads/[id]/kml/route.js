@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
+import { prisma } from '../../../../../lib/db';
 import { getSessionUser, unauthorizedResponse } from '../../../../../lib/auth';
 import { loadGeometryFeatures } from '../../../../../lib/geometry-query';
 import { geoJsonFeaturesToKml, safeKmlFilename } from '../../../../../lib/kml';
+import { ensureGisSchema } from '../../../../../lib/gis-schema';
 
 /**
  * Download every feature in one uploaded KML as a single KML document.
@@ -13,6 +15,7 @@ export async function GET(request, { params }) {
 
   const { id } = await params;
   try {
+    await ensureGisSchema(prisma);
     const features = await loadGeometryFeatures({ uploadIds: [id] });
     if (features.length === 0) {
       return NextResponse.json({ error: 'No features found for this file' }, { status: 404 });

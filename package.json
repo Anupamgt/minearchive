@@ -1,20 +1,27 @@
 {
   "name": "minearchive",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:debug": "next dev --inspect",
     "build": "prisma generate && next build",
+    "build:debug": "ENABLE_SOURCE_MAPS=true npm run build",
     "start": "next start",
+    "start:debug": "bash scripts/start-debug.sh",
+    "debug:prod": "npm run build:debug && npm run start:debug",
     "lint": "eslint",
     "postinstall": "prisma generate",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:supabase": "node scripts/setup-supabase.mjs",
+    "db:gis": "node scripts/ensure-gis-schema.mjs",
+    "db:lock-postgis": "node scripts/lock-postgis-catalog.mjs",
     "db:seed-demo": "node scripts/seed-demo-users.mjs",
     "db:seed-nodes": "node scripts/seed-mining-nodes.mjs",
     "db:migrate-mixed": "node scripts/migrate-mixed-geometries.mjs",
-    "test:kml": "node scripts/test-mixed-kml.mjs"
+    "test:kml": "node scripts/test-mixed-kml.mjs",
+    "docs:diagrams": "node scripts/render-diagrams.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.4.0",

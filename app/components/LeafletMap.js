@@ -29,17 +29,21 @@ function fitMapToLatLngs(map, latLngs, { maxZoom = 15, padding = [28, 28] } = {}
   map.fitBounds(latLngs, { padding, maxZoom });
 }
 
-function FitBounds({ layers, disabled }) {
+function FitBounds({ layers, selectedUploadId, disabled }) {
   const map = useMap();
 
   useEffect(() => {
     if (disabled) return;
+    const selected = (layers || []).filter(
+      (layer) => selectedUploadId && layer.uploadId === selectedUploadId
+    );
+    const source = selected.length > 0 ? selected : layers;
     const latLngs = [];
-    for (const layer of layers || []) {
+    for (const layer of source || []) {
       for (const ll of leafletLatLngsFromLayer(layer)) latLngs.push(ll);
     }
     fitMapToLatLngs(map, latLngs);
-  }, [layers, map, disabled]);
+  }, [layers, map, selectedUploadId, disabled]);
 
   return null;
 }
@@ -101,18 +105,20 @@ function MapFeature({ layer, highlighted, pathOptions, eventHandlers, children }
  * @param {object} props
  * @param {string|null} props.selectedNode
  * @param {(id: string) => void} props.onSelectNode
- * @param {(id: string) => void} [props.onSelectFeature]
- * @param {string|null} [props.highlightId]
  * @param {Array<{ id: string, name: string, color?: string, geomType?: string, positions: any }>} props.nodeOutlines
  * @param {Array<{ id: string, uploadId: string, label?: string, color?: string, geomType?: string, positions: any }>} props.kmlLayers
+ * @param {string|null} props.selectedUploadId
+ * @param {string|null} props.selectedLayerId
+ * @param {(layer: object) => void} props.onSelectLayer
  */
 export default function LeafletMap({
   selectedNode,
   onSelectNode,
-  onSelectFeature,
-  highlightId = null,
   nodeOutlines = [],
   kmlLayers = [],
+  selectedUploadId = null,
+  selectedLayerId = null,
+  onSelectLayer,
 }) {
   const overlayLayers = useMemo(() => {
     return (kmlLayers || []).map((layer, index) => ({
@@ -122,13 +128,13 @@ export default function LeafletMap({
   }, [kmlLayers]);
 
   const sortedOverlays = useMemo(() => {
-    if (!highlightId) return overlayLayers;
+    if (!selectedLayerId) return overlayLayers;
     return [...overlayLayers].sort((a, b) => {
-      if (a.id === highlightId) return 1;
-      if (b.id === highlightId) return -1;
+      if (a.id === selectedLayerId) return 1;
+      if (b.id === selectedLayerId) return -1;
       return 0;
     });
-  }, [overlayLayers, highlightId]);
+  }, [overlayLayers, selectedLayerId]);
 
   const fitSource = overlayLayers.length > 0 ? overlayLayers : nodeOutlines;
 
@@ -143,8 +149,12 @@ export default function LeafletMap({
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
 
-      <FitBounds layers={fitSource} disabled={Boolean(highlightId)} />
-      <ZoomToFeature layers={overlayLayers} highlightId={highlightId} />
+      <FitBounds
+        layers={fitSource}
+        selectedUploadId={selectedUploadId}
+        disabled={Boolean(selectedLayerId)}
+      />
+      <ZoomToFeature layers={overlayLayers} highlightId={selectedLayerId} />
 
       {nodeOutlines.map((node) => {
         const isSelected = selectedNode === node.id;
@@ -172,28 +182,52 @@ export default function LeafletMap({
       })}
 
       {sortedOverlays.map((layer) => {
-        const highlighted = highlightId === layer.id;
+        const isSelectedSite = selectedLayerId && selectedLayerId === layer.id;
+        const isSelectedFile = selectedUploadId && selectedUploadId === layer.uploadId;
+        const dimOthers = Boolean(selectedUploadId) && !isSelectedFile;
         const isPoint = layer.geomType === 'Point';
         const isLine = layer.geomType === 'LineString';
         return (
           <MapFeature
             key={`kml-${layer.id}`}
             layer={layer}
-            highlighted={highlighted}
+            highlighted={isSelectedSite}
             pathOptions={{
               color: layer.color,
-              weight: highlighted ? (isPoint ? 3 : 5) : isLine ? 3.5 : 2.5,
+              weight: isSelectedSite
+                ? isPoint
+                  ? 3
+                  : 5
+                : isSelectedFile
+                  ? isLine
+                    ? 4
+                    : 3
+                  : dimOthers
+                    ? 1.5
+                    : isLine
+                      ? 3.5
+                      : 2.5,
               fillColor: layer.color,
-              fillOpacity: isPoint ? 0.92 : isLine ? 0 : highlighted ? 0.5 : 0.32,
+              fillOpacity: isPoint
+                ? 0.92
+                : isLine
+                  ? 0
+                  : isSelectedSite
+                    ? 0.55
+                    : isSelectedFile
+                      ? 0.4
+                      : dimOthers
+                        ? 0.1
+                        : 0.32,
             }}
             eventHandlers={{
               click: (event) => {
                 event.originalEvent?.stopPropagation?.();
-                onSelectFeature?.(layer.id);
+                onSelectLayer?.(layer);
               },
             }}
           >
-            <Tooltip direction="top" sticky permanent={overlayLayers.length <= 3}>
+            <Tooltip direction="top" sticky permanent={overlayLayers.length <= 3 && !selectedLayerId}>
               {layer.label || layer.uploadId}
             </Tooltip>
           </MapFeature>

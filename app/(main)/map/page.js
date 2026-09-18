@@ -1,13 +1,21 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 import { useToast } from '../../components/ToastProvider';
 import { readSessionFromCookie } from '../../../lib/session-client';
 import {
   colorForIndex,
-  geoJsonToLeafletPositions,
   describeGeomType,
+  extraAttributes,
+  formatHectares,
+  formatMeters,
+  geoJsonToLeafletPositions,
+  inspectDistrict,
+  inspectSiteName,
+  KML_TYPES,
+  layerLabel,
 } from '../../../lib/kml';
 import './map.css';
 
@@ -21,28 +29,106 @@ const MapWithNoSSR = dynamic(() => import('../../components/LeafletMap'), {
   ),
 });
 
-function featureKey(feature) {
-  return feature?.id || feature?.properties?.geometryId;
-}
-
-function normalizeGeomType(type) {
-  if (type === 'MultiPolygon') return 'Polygon';
-  if (type === 'MultiLineString') return 'LineString';
-  if (type === 'MultiPoint') return 'Point';
-  return type || 'Polygon';
-}
-
-function layerFromGeometry(feature, extra = {}) {
-  const geometry = feature?.geometry;
-  const geomType = normalizeGeomType(feature?.properties?.geomType || geometry?.type);
-  const positions = geoJsonToLeafletPositions(geometry);
-  if (!positions) return null;
-  if (geomType === 'Point') {
-    if (!Number.isFinite(positions[0]) || !Number.isFinite(positions[1])) return null;
-  } else if (!positions.length) {
-    return null;
+function formatDate(value) {
+  if (!value) return null;
+  if (typeof value === 'string') return value.slice(0, 10);
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
   }
-  return { geomType, positions, ...extra };
+  return null;
+}
+
+function fieldChangedLabel(field) {
+  switch (field) {
+    case 'site_name':
+      return 'Site name';
+    case 'kml_type':
+      return 'KML type';
+    case 'survey_date':
+      return 'Survey date';
+    case 'district':
+      return 'District';
+    default:
+      return field || 'Field';
+  }
+}
+
+function SiteAttributeFields({
+  selectedSite,
+  upload,
+  isAdmin,
+  district,
+  nodeId,
+  savingField,
+  onSaveName,
+  onSaveDistrict,
+  onSaveSurveyDate,
+  onSaveKmlType,
+}) {
+  const [draftName, setDraftName] = useState(selectedSite.displayName || selectedSite.siteName || '');
+  const [draftDistrict, setDraftDistrict] = useState(district || '');
+  const [draftSurveyDate, setDraftSurveyDate] = useState(
+    formatDate(selectedSite.surveyDate) || formatDate(upload.surveyDate) || ''
+  );
+  const [draftKmlType, setDraftKmlType] = useState(selectedSite.kmlType || '');
+
+  return (
+    <div className="map-file-card-fields">
+      <label htmlFor="inspect-site-name">Site name / code</label>
+      <input
+        id="inspect-site-name"
+        type="text"
+        value={draftName}
+        placeholder="Unnamed site"
+        disabled={!isAdmin || savingField === 'name'}
+        onChange={(e) => setDraftName(e.target.value)}
+        onBlur={() => onSaveName(draftName.trim())}
+      />
+
+      <label htmlFor="inspect-district">District</label>
+      <input
+        id="inspect-district"
+        type="text"
+        value={draftDistrict}
+        placeholder="—"
+        disabled={!isAdmin || !nodeId || savingField === 'district'}
+        onChange={(e) => setDraftDistrict(e.target.value)}
+        onBlur={() => onSaveDistrict(draftDistrict.trim())}
+      />
+
+      <label htmlFor="inspect-survey-date">Survey date</label>
+      <input
+        id="inspect-survey-date"
+        type="date"
+        value={draftSurveyDate}
+        disabled={!isAdmin || savingField === 'surveyDate'}
+        onChange={(e) => {
+          const next = e.target.value;
+          setDraftSurveyDate(next);
+          onSaveSurveyDate(next);
+        }}
+      />
+
+      <label htmlFor="inspect-kml-type">KML type</label>
+      <select
+        id="inspect-kml-type"
+        value={draftKmlType}
+        disabled={!isAdmin || savingField === 'kmlType'}
+        onChange={(e) => {
+          const next = e.target.value;
+          setDraftKmlType(next);
+          onSaveKmlType(next);
+        }}
+      >
+        <option value="">—</option>
+        {KML_TYPES.map((type) => (
+          <option key={type} value={type}>
+            {type}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
 }
 
 function filenameFromDisposition(header, fallback) {
@@ -73,53 +159,431 @@ async function downloadAuthenticated(url, fallbackName, { method = 'GET', body }
     throw new Error(data.error || 'Download failed');
   }
   const blob = await res.blob();
-  const name = filenameFromDisposition(res.headers.get('Content-Disposition'), fallbackName);
+  const filename = filenameFromDisposition(res.headers.get('Content-Disposition'), fallbackName);
   const objectUrl = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = objectUrl;
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
   URL.revokeObjectURL(objectUrl);
 }
 
-function featureMeasureLines(props) {
-  const type = props?.geomType;
-  const lines = [];
-  if (type === 'LineString') {
-    const m = Number(props.perimeterMeters);
-    if (Number.isFinite(m)) {
-      lines.push(`Length ${m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${m.toFixed(1)} m`}`);
+async function downloadKmlFile(geometryId) {
+  await downloadAuthenticated(
+    `/api/geometries/${encodeURIComponent(geometryId)}/kml`,
+    'site.kml'
+  );
+}
+
+function normalizeGeomType(type) {
+  if (type === 'MultiPolygon') return 'Polygon';
+  if (type === 'MultiLineString') return 'LineString';
+  if (type === 'MultiPoint') return 'Point';
+  return type || 'Polygon';
+}
+
+function positionsFromFeature(feature) {
+  const geometry = feature?.geometry;
+  const geomType = normalizeGeomType(feature?.properties?.geomType || geometry?.type);
+  const positions = geoJsonToLeafletPositions(geometry);
+  if (!positions) return null;
+  if (geomType === 'Point') {
+    if (!Number.isFinite(positions[0]) || !Number.isFinite(positions[1])) return null;
+  } else if (!positions.length) {
+    return null;
+  }
+  return { geomType, positions };
+}
+
+function siteMeasureText(site) {
+  const type = site?.geomType || 'Polygon';
+  if (type === 'Point') return 'Point';
+  if (type === 'LineString') return formatMeters(site.perimeterMeters);
+  return `${formatHectares(site.areaHectares)} · ${formatMeters(site.perimeterMeters)}`;
+}
+
+function FileInspectCard({
+  upload,
+  sites,
+  selectedGeometryId,
+  color,
+  isAdmin,
+  district,
+  nodeId,
+  onSelectSite,
+  onClose,
+  onSaved,
+  onViewHistory,
+  onDownloadFile,
+}) {
+  const totalArea = sites.reduce(
+    (sum, site) => sum + (typeof site.areaHectares === 'number' ? site.areaHectares : 0),
+    0
+  );
+  const totalPerimeter = sites.reduce(
+    (sum, site) => sum + (typeof site.perimeterMeters === 'number' ? site.perimeterMeters : 0),
+    0
+  );
+  const namedCount = sites.filter((site) => site.hasSiteName).length;
+  const selectedSite = sites.find((site) => site.id === selectedGeometryId) || sites[0] || null;
+  const selectedExtras = selectedSite ? extraAttributes(selectedSite.sourceProperties) : [];
+  const { showToast } = useToast();
+  const [savingField, setSavingField] = useState('');
+  const [downloading, setDownloading] = useState(false);
+  const [downloadingFile, setDownloadingFile] = useState(false);
+
+  const displayName = selectedSite
+    ? inspectSiteName({
+        siteName: selectedSite.siteName,
+        kmlFilePath: upload.kmlFilePath || selectedSite.sourceFile,
+        geometryId: selectedSite.id,
+        polygonCount: sites.length,
+        sourceProperties: selectedSite.sourceProperties,
+      })
+    : '';
+  const displayDistrict = inspectDistrict({
+    nodeName: upload.nodeName || district,
+    locationLabel: upload.locationLabel,
+  });
+  const siteCode = displayName || selectedSite?.id || '';
+
+  const saveGeometry = async (patch, fieldKey) => {
+    if (!selectedSite || !isAdmin) return;
+    setSavingField(fieldKey);
+    try {
+      const res = await fetch(`/api/geometries/${encodeURIComponent(selectedSite.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(patch),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not save');
+      showToast('Saved', 'success');
+      onSaved?.(data);
+    } catch (err) {
+      showToast(err.message || 'Could not save', 'error');
+    } finally {
+      setSavingField('');
     }
-    return lines;
-  }
-  if (type === 'Point') return lines;
-  const area = Number(props?.areaHectares);
-  if (Number.isFinite(area)) lines.push(`Area ${area.toFixed(2)} ha`);
-  const peri = Number(props?.perimeterMeters);
-  if (Number.isFinite(peri)) {
-    lines.push(`Perimeter ${peri >= 1000 ? `${(peri / 1000).toFixed(2)} km` : `${peri.toFixed(1)} m`}`);
-  }
-  return lines;
+  };
+
+  const saveDistrict = async (nextValue) => {
+    if (!selectedSite || !isAdmin || !nodeId) return;
+    const next = (nextValue || '').trim();
+    const current = displayDistrict;
+    if (next === current) return;
+    setSavingField('district');
+    try {
+      const res = await fetch(`/api/nodes/${encodeURIComponent(nodeId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ name: next, locationLabel: next, geometryId: selectedSite.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not save district');
+      showToast('Saved', 'success');
+      onSaved?.({ district: data.name ?? next, nodeName: data.name ?? next });
+    } catch (err) {
+      showToast(err.message || 'Could not save district', 'error');
+    } finally {
+      setSavingField('');
+    }
+  };
+
+  const downloadFileKml = async () => {
+    if (!onDownloadFile) return;
+    setDownloadingFile(true);
+    try {
+      await onDownloadFile();
+    } catch (err) {
+      showToast(err.message || 'Could not download KML', 'error');
+    } finally {
+      setDownloadingFile(false);
+    }
+  };
+
+  const downloadKml = async () => {
+    const geometryId = selectedSite?.id;
+    if (!geometryId) return;
+    setDownloading(true);
+    try {
+      await downloadKmlFile(geometryId);
+    } catch (err) {
+      showToast(err.message || 'Could not download KML', 'error');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <aside className="map-file-card" role="region" aria-label="Selected boundary file">
+      <div className="map-file-card-head">
+        <span className="map-file-card-swatch" style={{ background: color }} />
+        <div className="map-file-card-titles">
+          <strong title={upload.kmlFilePath || 'Boundary file'}>
+            {upload.kmlFilePath || 'Boundary file'}
+          </strong>
+          <span>
+            {formatDate(upload.surveyDate) || formatDate(upload.uploadDate) || 'Survey file'}
+          </span>
+        </div>
+        <button
+          type="button"
+          className="btn btn-primary btn-sm map-file-card-download"
+          onClick={downloadFileKml}
+          disabled={downloadingFile || !onDownloadFile}
+          title="Download every feature in this file as KML"
+        >
+          {downloadingFile ? 'Preparing…' : 'Download KML'}
+        </button>
+        <button type="button" className="map-file-card-close" aria-label="Close file card" onClick={onClose}>
+          ×
+        </button>
+      </div>
+
+      <dl className="map-file-card-meta">
+        {upload.uploadedBy && (
+          <>
+            <dt>Uploaded by</dt>
+            <dd>{upload.uploadedBy}</dd>
+          </>
+        )}
+        {formatDate(upload.uploadDate) && (
+          <>
+            <dt>Uploaded</dt>
+            <dd>{formatDate(upload.uploadDate)}</dd>
+          </>
+        )}
+        <>
+          <dt>Survey date</dt>
+          <dd>{formatDate(upload.surveyDate) || '—'}</dd>
+        </>
+      </dl>
+
+      {upload.notes ? <p className="map-file-card-notes">{upload.notes}</p> : null}
+
+      <div className="map-file-card-stats">
+        <div>
+          <span>{sites.length || upload.geometryCount || 0}</span>
+          <label>Features</label>
+        </div>
+        <div>
+          <span>{namedCount}</span>
+          <label>Named sites</label>
+        </div>
+        <div>
+          <span>{formatHectares(totalArea)}</span>
+          <label>Total area</label>
+        </div>
+        <div>
+          <span>{formatMeters(totalPerimeter)}</span>
+          <label>Perimeter</label>
+        </div>
+      </div>
+
+      {selectedSite && (
+        <div className="map-file-card-selected">
+          <div className="map-file-card-selected-label">Selected site</div>
+          <div className="map-file-card-selected-name">
+            {displayName || 'Unnamed site'}
+          </div>
+          <div className="map-file-card-selected-metrics">
+            {describeGeomType(selectedSite.geomType)}
+            {' · '}
+            {siteMeasureText(selectedSite)}
+          </div>
+
+          <SiteAttributeFields
+            key={`${selectedSite.id}:${displayName}:${selectedSite.kmlType || ''}:${formatDate(selectedSite.surveyDate) || formatDate(upload.surveyDate) || ''}:${displayDistrict}`}
+            selectedSite={{ ...selectedSite, displayName }}
+            upload={upload}
+            isAdmin={isAdmin}
+            district={displayDistrict}
+            nodeId={nodeId}
+            savingField={savingField}
+            onSaveName={(next) => {
+              const current = displayName;
+              if (next === current) return;
+              saveGeometry({ name: next }, 'name');
+            }}
+            onSaveDistrict={saveDistrict}
+            onSaveSurveyDate={(next) => {
+              const current = formatDate(selectedSite.surveyDate) || formatDate(upload.surveyDate) || '';
+              if (next === current) return;
+              saveGeometry({ surveyDate: next || null }, 'surveyDate');
+            }}
+            onSaveKmlType={(next) => {
+              const current = selectedSite.kmlType || '';
+              if (next === current) return;
+              saveGeometry({ kmlType: next || null }, 'kmlType');
+            }}
+          />
+
+          {selectedExtras.length > 0 && (
+            <dl className="map-file-card-attrs">
+              {selectedExtras.map((row) => (
+                <div key={row.key}>
+                  <dt>{row.key}</dt>
+                  <dd>{row.value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+
+          <div className="map-file-card-actions">
+            <button type="button" className="btn btn-outline btn-sm" onClick={downloadKml} disabled={downloading}>
+              {downloading ? 'Preparing…' : 'Download this feature'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => onViewHistory?.(siteCode, selectedSite.id)}
+            >
+              View change history
+            </button>
+          </div>
+        </div>
+      )}
+
+      {sites.length > 0 && (
+        <div className="map-file-card-sites">
+          <div className="map-file-card-sites-title">Sites in this file</div>
+          <ul>
+            {sites.map((site) => {
+              const active = site.id === selectedGeometryId;
+              return (
+                <li key={site.id}>
+                  <button
+                    type="button"
+                    className={`map-file-site${active ? ' active' : ''}`}
+                    onClick={() => onSelectSite(site)}
+                  >
+                    <span className="map-file-site-dot" style={{ background: site.color }} />
+                    <span className="map-file-site-copy">
+                      <span className="map-file-site-name">{site.label}</span>
+                      <span className="map-file-site-meta">
+                        {describeGeomType(site.geomType)}
+                        {' · '}
+                        {siteMeasureText(site)}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </aside>
+  );
+}
+
+function ActivityLogPanel({ initialSite, initialGeometryId }) {
+  const [site, setSite] = useState(initialSite || '');
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const debounceRef = useRef(null);
+
+  useEffect(() => {
+    const load = (query) => {
+      const params = new URLSearchParams({ limit: '80' });
+      if (query) params.set('site', query);
+      if (initialGeometryId && !query) params.set('geometryId', initialGeometryId);
+      setLoading(true);
+      fetch(`/api/map/activity-log?${params.toString()}`, { credentials: 'same-origin' })
+        .then((res) => res.json())
+        .then((data) => {
+          setLogs(Array.isArray(data) ? data : []);
+          setLoading(false);
+        })
+        .catch(() => {
+          setLogs([]);
+          setLoading(false);
+        });
+    };
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => load(site.trim()), site === (initialSite || '') ? 0 : 280);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [site, initialSite, initialGeometryId]);
+
+  return (
+    <div className="gis-activity">
+      <div className="gis-activity-search">
+        <label htmlFor="activity-site-filter">Filter by site code</label>
+        <input
+          id="activity-site-filter"
+          type="search"
+          value={site}
+          placeholder="e.g. SITE-042"
+          onChange={(e) => setSite(e.target.value)}
+        />
+      </div>
+      <div className="gis-activity-list">
+        {loading ? (
+          <>
+            <div className="skeleton" style={{ height: 52, marginBottom: 8 }} />
+            <div className="skeleton" style={{ height: 52, marginBottom: 8 }} />
+            <div className="skeleton" style={{ height: 52 }} />
+          </>
+        ) : logs.length === 0 ? (
+          <p className="gis-activity-empty">
+            {site
+              ? `No attribute changes match “${site}”.`
+              : 'No attribute changes yet. Edits to site name, district, survey date, or KML type will appear here.'}
+          </p>
+        ) : (
+          logs.map((entry) => (
+            <article key={entry.id} className="gis-activity-row">
+              <div className="gis-activity-row-top">
+                <strong>{entry.siteCode}</strong>
+                <span>{entry.changedAt ? String(entry.changedAt).replace('T', ' ').slice(0, 16) : ''}</span>
+              </div>
+              <div className="gis-activity-row-mid">
+                {fieldChangedLabel(entry.fieldChanged)}
+                {': '}
+                <span className="gis-activity-old">{entry.oldValue || '—'}</span>
+                {' → '}
+                <span className="gis-activity-new">{entry.newValue || '—'}</span>
+              </div>
+              <div className="gis-activity-row-by">{entry.changedBy}</div>
+            </article>
+          ))
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function MapPage() {
   const { showToast } = useToast();
+  const router = useRouter();
   const [nodes, setNodes] = useState([]);
   const [selectedNode, setSelectedNode] = useState(null);
   const [uploads, setUploads] = useState([]);
   const [shownUploads, setShownUploads] = useState(() => new Set());
   const [downloadSelected, setDownloadSelected] = useState(() => new Set());
-  const [selectedFeatureId, setSelectedFeatureId] = useState(null);
+  const [selectedUploadId, setSelectedUploadId] = useState(null);
+  const [selectedGeometryId, setSelectedGeometryId] = useState(null);
   const [loadingUploads, setLoadingUploads] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [kmlFeatures, setKmlFeatures] = useState([]);
   const [role, setRole] = useState('Admin');
+  const [nodesLoaded, setNodesLoaded] = useState(false);
   const [breachModal, setBreachModal] = useState(false);
   const [breachReason, setBreachReason] = useState(
     'Exceeded approved perimeter boundary by 14.2 meters towards northern riverbank'
   );
+  const [panelTab, setPanelTab] = useState('layers');
+  const [activitySiteFilter, setActivitySiteFilter] = useState('');
+  const [activityGeometryId, setActivityGeometryId] = useState('');
+  const [layersVersion, setLayersVersion] = useState(0);
 
   useEffect(() => {
     const decoded = readSessionFromCookie();
@@ -127,11 +591,24 @@ export default function MapPage() {
   }, []);
 
   // Auto-select a node when arriving from the upload flow (/map?nodeId=...),
-  // so freshly uploaded KML features are shown on the map immediately.
+  // so freshly uploaded KML polygons are shown on the map immediately.
+  // /map?site=SITE-042 (and/or geometryId) opens the Activity Log pre-filtered.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const nid = new URLSearchParams(window.location.search).get('nodeId');
+    const params = new URLSearchParams(window.location.search);
+    const nid = params.get('nodeId');
+    const site = params.get('site');
+    const geometryId = params.get('geometryId');
     if (nid) setSelectedNode(nid);
+    if (site) {
+      setActivitySiteFilter(site);
+      setPanelTab('activity');
+    }
+    if (geometryId) {
+      setActivityGeometryId(geometryId);
+      setSelectedGeometryId(geometryId);
+      if (!site) setPanelTab('activity');
+    }
   }, []);
 
   const isAdmin = role.toLowerCase() === 'admin';
@@ -140,23 +617,33 @@ export default function MapPage() {
     fetch('/api/nodes', { credentials: 'same-origin' })
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data)) setNodes(data);
+        setNodes(Array.isArray(data) ? data : []);
+        setNodesLoaded(true);
       })
-      .catch(() => setNodes([]));
+      .catch(() => {
+        setNodes([]);
+        setNodesLoaded(true);
+      });
   }, []);
 
+  const effectiveNodeId = useMemo(() => {
+    if (!selectedNode) return null;
+    if (!nodesLoaded) return selectedNode;
+    return nodes.some((n) => n.id === selectedNode) ? selectedNode : null;
+  }, [selectedNode, nodes, nodesLoaded]);
+
   useEffect(() => {
-    if (!selectedNode) {
+    if (!effectiveNodeId) {
       setUploads([]);
       setShownUploads(new Set());
       setDownloadSelected(new Set());
-      setSelectedFeatureId(null);
+      setSelectedUploadId(null);
+      setSelectedGeometryId(null);
       return;
     }
     setLoadingUploads(true);
     setDownloadSelected(new Set());
-    setSelectedFeatureId(null);
-    fetch(`/api/uploads?nodeId=${encodeURIComponent(selectedNode)}`, {
+    fetch(`/api/uploads?nodeId=${encodeURIComponent(effectiveNodeId)}`, {
       credentials: 'same-origin',
     })
       .then((res) => res.json())
@@ -167,16 +654,21 @@ export default function MapPage() {
         // Auto-show the latest upload so KML is visible immediately
         if (list.length > 0) {
           setShownUploads(new Set([list[0].id]));
+          setSelectedUploadId(list[0].id);
         } else {
           setShownUploads(new Set());
+          setSelectedUploadId(null);
         }
+        setSelectedGeometryId(null);
       })
       .catch(() => {
         setLoadingUploads(false);
         setUploads([]);
         setShownUploads(new Set());
+        setSelectedUploadId(null);
+        setSelectedGeometryId(null);
       });
-  }, [selectedNode]);
+  }, [effectiveNodeId]);
 
   // Load GeoJSON for all shown uploads (supports multiple KML overlays)
   useEffect(() => {
@@ -186,7 +678,7 @@ export default function MapPage() {
       return;
     }
     const params = new URLSearchParams({ uploadIds: ids.join(',') });
-    if (selectedNode) params.set('nodeId', selectedNode);
+    if (effectiveNodeId) params.set('nodeId', effectiveNodeId);
 
     fetch(`/api/map/layers?${params.toString()}`, { credentials: 'same-origin' })
       .then((res) => res.json())
@@ -194,13 +686,16 @@ export default function MapPage() {
         setKmlFeatures(Array.isArray(fc?.features) ? fc.features : []);
       })
       .catch(() => setKmlFeatures([]));
-  }, [shownUploads, selectedNode]);
+  }, [shownUploads, effectiveNodeId, layersVersion]);
 
   const toggleShow = (uploadId) => {
     setShownUploads((prev) => {
       const next = new Set(prev);
       if (next.has(uploadId)) {
         next.delete(uploadId);
+        if (selectedUploadId === uploadId) {
+          setSelectedGeometryId(null);
+        }
       } else {
         next.add(uploadId);
       }
@@ -208,14 +703,13 @@ export default function MapPage() {
     });
   };
 
-  const toggleDownloadSelect = (uploadId) => {
-    setDownloadSelected((prev) => {
+  const selectUpload = (upload) => {
+    setSelectedUploadId(upload.id);
+    setSelectedGeometryId(null);
+    setShownUploads((prev) => {
+      if (prev.has(upload.id)) return prev;
       const next = new Set(prev);
-      if (next.has(uploadId)) {
-        next.delete(uploadId);
-      } else {
-        next.add(uploadId);
-      }
+      next.add(upload.id);
       return next;
     });
   };
@@ -227,25 +721,224 @@ export default function MapPage() {
 
   const hideAll = () => {
     setShownUploads(new Set());
+    setSelectedGeometryId(null);
     showToast('Hid all boundary layers', 'info');
   };
 
-  const handleDownload = async (url, fallbackName, options) => {
+  const activeNodeObj = nodes.find((n) => n.id === effectiveNodeId);
+  const nodeName = activeNodeObj?.name || 'District';
+  const nodeDistrict = inspectDistrict({
+    nodeName: activeNodeObj?.name,
+    locationLabel: activeNodeObj?.locationLabel,
+  });
+
+  const uploadColorIndex = useMemo(() => {
+    const map = new Map();
+    uploads.forEach((u, i) => map.set(u.id, i));
+    return map;
+  }, [uploads]);
+
+  const kmlLayers = useMemo(() => {
+    // Position of each polygon within its own file, so unnamed legacy rows can
+    // be numbered rather than repeating one filename many times.
+    const totalPerUpload = new Map();
+    for (const feature of kmlFeatures) {
+      const uploadId = feature.properties?.uploadId;
+      totalPerUpload.set(uploadId, (totalPerUpload.get(uploadId) || 0) + 1);
+    }
+    const seenPerUpload = new Map();
+
+    return kmlFeatures
+      .map((feature) => {
+        const parsed = positionsFromFeature(feature);
+        if (!parsed) return null;
+        const { geomType, positions } = parsed;
+        const props = feature.properties || {};
+        const uploadId = props.uploadId;
+        const color = colorForIndex(uploadColorIndex.get(uploadId) ?? 0);
+
+        const fallbackIndex = seenPerUpload.get(uploadId) || 0;
+        seenPerUpload.set(uploadId, fallbackIndex + 1);
+
+        const polygonCount = totalPerUpload.get(uploadId) || 1;
+        const displayName = inspectSiteName({
+          siteName: props.siteName,
+          kmlFilePath: props.kmlFilePath,
+          geometryId: feature.id || props.geometryId,
+          polygonCount,
+          sourceProperties: props.sourceProperties,
+        });
+
+        return {
+          id: feature.id || props.geometryId,
+          uploadId,
+          color,
+          positions,
+          geomType,
+          // Each polygon is its own site, so it gets its own name.
+          label: layerLabel({
+            name: displayName,
+            kmlFilePath: props.kmlFilePath,
+            partIndex: props.partIndex,
+            partCount: props.partCount,
+            fallbackIndex,
+            fallbackCount: polygonCount,
+          }),
+          siteName: props.siteName || '',
+          displayName,
+          kmlType: props.kmlType || '',
+          surveyDate: props.surveyDate || null,
+          district: inspectDistrict({
+            nodeName: props.nodeName,
+            locationLabel: props.locationLabel,
+          }),
+          nodeName: props.nodeName || '',
+          nodeId: props.nodeId || null,
+          areaHectares: props.areaHectares,
+          perimeterMeters: props.perimeterMeters,
+          sourceProperties: props.sourceProperties,
+          sourceFile: props.kmlFilePath,
+          hasSiteName: Boolean(displayName),
+        };
+      })
+      .filter(Boolean);
+  }, [kmlFeatures, uploadColorIndex]);
+
+  // Build light node outlines from any known geometries (all nodes)
+  const [nodeOutlines, setNodeOutlines] = useState([]);
+  useEffect(() => {
+    if (nodes.length === 0) {
+      setNodeOutlines([]);
+      return;
+    }
+    fetch('/api/map/layers', { credentials: 'same-origin' })
+      .then((res) => res.json())
+      .then((fc) => {
+        const byNode = new Map();
+        for (const feature of fc?.features || []) {
+          const nid = feature.properties?.nodeId;
+          if (!nid || byNode.has(nid)) continue;
+          const parsed = positionsFromFeature(feature);
+          if (!parsed) continue;
+          const node = nodes.find((n) => n.id === nid);
+          byNode.set(nid, {
+            id: nid,
+            name: node?.name || feature.properties?.nodeName || 'Node',
+            color: '#64748b',
+            geomType: parsed.geomType,
+            positions: parsed.positions,
+          });
+        }
+        setNodeOutlines(Array.from(byNode.values()));
+      })
+      .catch(() => setNodeOutlines([]));
+  }, [nodes]);
+
+  // Legend reflects the layers currently drawn on the map — one row per site.
+  const legendItems = useMemo(() => {
+    return kmlLayers.map((layer) => ({
+      id: layer.id,
+      uploadId: layer.uploadId,
+      color: layer.color,
+      label: layer.label,
+      geomType: layer.geomType,
+      area:
+        layer.geomType === 'LineString'
+          ? formatMeters(layer.perimeterMeters)
+          : layer.geomType === 'Point'
+            ? 'point'
+            : typeof layer.areaHectares === 'number'
+              ? formatHectares(layer.areaHectares)
+              : null,
+    }));
+  }, [kmlLayers]);
+
+  // Files ingested before site names were captured only have a file name to
+  // show. Say so, rather than leaving the repeated labels unexplained.
+  const unnamedFiles = useMemo(() => {
+    const files = new Set();
+    for (const layer of kmlLayers) {
+      if (!layer.hasSiteName && layer.sourceFile) files.add(layer.sourceFile);
+    }
+    return [...files];
+  }, [kmlLayers]);
+
+  const selectedUpload = uploads.find((u) => u.id === selectedUploadId) || null;
+  const selectedSites = useMemo(
+    () => kmlLayers.filter((layer) => layer.uploadId === selectedUploadId),
+    [kmlLayers, selectedUploadId]
+  );
+  const selectedUploadColor = colorForIndex(uploadColorIndex.get(selectedUploadId) ?? 0);
+  const activeGeometryId = useMemo(() => {
+    if (selectedSites.some((site) => site.id === selectedGeometryId)) return selectedGeometryId;
+    return selectedSites[0]?.id || null;
+  }, [selectedSites, selectedGeometryId]);
+
+  const openActivityLog = (siteCode, geometryId) => {
+    const params = new URLSearchParams();
+    if (effectiveNodeId) params.set('nodeId', effectiveNodeId);
+    if (siteCode) params.set('site', siteCode);
+    if (geometryId) params.set('geometryId', geometryId);
+    setActivitySiteFilter(siteCode || '');
+    setActivityGeometryId(geometryId || '');
+    setPanelTab('activity');
+    router.replace(`/map?${params.toString()}`, { scroll: false });
+  };
+
+  const refreshAfterAttributeSave = (payload) => {
+    if (payload?.surveyDate !== undefined) {
+      setUploads((prev) =>
+        prev.map((item) =>
+          item.id === selectedUploadId ? { ...item, surveyDate: payload.surveyDate } : item
+        )
+      );
+    }
+    if (payload?.district !== undefined && effectiveNodeId) {
+      setNodes((prev) =>
+        prev.map((node) =>
+          node.id === effectiveNodeId
+            ? {
+                ...node,
+                name: payload.nodeName || payload.district || node.name,
+                locationLabel: payload.district,
+              }
+            : node
+        )
+      );
+      setUploads((prev) =>
+        prev.map((item) =>
+          item.id === selectedUploadId
+            ? {
+                ...item,
+                nodeName: payload.nodeName || payload.district || item.nodeName,
+                district: payload.nodeName || payload.district || item.district,
+              }
+            : item
+        )
+      );
+    }
+    setLayersVersion((n) => n + 1);
+  };
+
+  const [savingBreach, setSavingBreach] = useState(false);
+
+  const downloadUploadKml = async (upload) => {
+    selectUpload(upload);
+    const fallback = upload.kmlFilePath?.replace(/\.kmz$/i, '.kml') || 'layer.kml';
     try {
-      await downloadAuthenticated(url, fallbackName, options);
+      await downloadAuthenticated(`/api/uploads/${encodeURIComponent(upload.id)}/kml`, fallback);
     } catch (err) {
-      showToast(err.message || 'Download failed', 'error');
+      showToast(err.message || 'Could not download KML', 'error');
     }
   };
 
-  const downloadFileKml = (upload) => {
-    const fallback = upload.kmlFilePath?.replace(/\.kmz$/i, '.kml') || 'layer.kml';
-    return handleDownload(`/api/uploads/${encodeURIComponent(upload.id)}/kml`, fallback);
-  };
-
-  const downloadFeatureKml = (featureId, name) => {
-    const fallback = `${name || 'feature'}.kml`;
-    return handleDownload(`/api/geometries/${encodeURIComponent(featureId)}/kml`, fallback);
+  const toggleDownloadSelect = (uploadId) => {
+    setDownloadSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(uploadId)) next.delete(uploadId);
+      else next.add(uploadId);
+      return next;
+    });
   };
 
   const exportSelected = async (mode) => {
@@ -268,80 +961,63 @@ export default function MapPage() {
     }
   };
 
-  const activeNodeObj = nodes.find((n) => n.id === selectedNode);
-  const nodeName = activeNodeObj?.name || 'Monitoring area';
-
-  const uploadColorIndex = useMemo(() => {
-    const map = new Map();
-    uploads.forEach((u, i) => map.set(u.id, i));
-    return map;
-  }, [uploads]);
-
-  const kmlLayers = useMemo(() => {
-    return kmlFeatures
-      .map((feature) => {
-        const uploadId = feature.properties?.uploadId;
-        const color = colorForIndex(uploadColorIndex.get(uploadId) ?? 0);
-        const name = feature.properties?.name || feature.properties?.kmlFilePath || 'Untitled';
-        const layer = layerFromGeometry(feature, {
-          id: featureKey(feature),
-          uploadId,
-          color,
-          name,
-          label: name,
-        });
-        return layer;
-      })
-      .filter(Boolean);
-  }, [kmlFeatures, uploadColorIndex]);
-
-  useEffect(() => {
-    if (selectedFeatureId && !kmlLayers.some((layer) => layer.id === selectedFeatureId)) {
-      setSelectedFeatureId(null);
-    }
-  }, [kmlLayers, selectedFeatureId]);
-
-  // Build light node outlines from any known geometries (all nodes)
-  const [nodeOutlines, setNodeOutlines] = useState([]);
-  useEffect(() => {
-    if (nodes.length === 0) {
-      setNodeOutlines([]);
-      return;
-    }
-    fetch('/api/map/layers', { credentials: 'same-origin' })
-      .then((res) => res.json())
-      .then((fc) => {
-        const byNode = new Map();
-        for (const feature of fc?.features || []) {
-          const nid = feature.properties?.nodeId;
-          if (!nid || byNode.has(nid)) continue;
-          const node = nodes.find((n) => n.id === nid);
-          const layer = layerFromGeometry(feature, {
-            id: nid,
-            name: node?.name || feature.properties?.nodeName || 'Node',
-            color: '#64748b',
-          });
-          if (layer) byNode.set(nid, layer);
-        }
-        setNodeOutlines(Array.from(byNode.values()));
-      })
-      .catch(() => setNodeOutlines([]));
-  }, [nodes]);
-
-  const legendItems = useMemo(() => kmlLayers, [kmlLayers]);
-
-  const selectedFeature = useMemo(
-    () => kmlFeatures.find((feature) => featureKey(feature) === selectedFeatureId) || null,
-    [kmlFeatures, selectedFeatureId]
-  );
-
-  const confirmFlagBreach = (e) => {
+  const confirmFlagBreach = async (e) => {
     e.preventDefault();
-    setBreachModal(false);
-    showToast(
-      `Encroachment breach flagged for ${nodeName}. A violation notice was recorded in the audit trail.`,
-      'error'
-    );
+    if (!effectiveNodeId) return;
+
+    setSavingBreach(true);
+    try {
+      const res = await fetch(`/api/nodes/${encodeURIComponent(effectiveNodeId)}/breach`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ reason: breachReason }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not record breach notice');
+
+      setBreachModal(false);
+      showToast(
+        `Encroachment breach recorded for ${nodeName}. See the Activity Log.`,
+        'error'
+      );
+    } catch (err) {
+      showToast(err.message || 'Could not record breach notice', 'error');
+    } finally {
+      setSavingBreach(false);
+    }
+  };
+
+  const deleteLayer = async (upload) => {
+    if (!window.confirm(`Remove boundary file “${upload.kmlFilePath || upload.id}”?`)) return;
+
+    try {
+      const res = await fetch(`/api/uploads/${encodeURIComponent(upload.id)}`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Delete failed');
+
+      setUploads((prev) => prev.filter((u) => u.id !== upload.id));
+      setShownUploads((prev) => {
+        const next = new Set(prev);
+        next.delete(upload.id);
+        return next;
+      });
+      setDownloadSelected((prev) => {
+        const next = new Set(prev);
+        next.delete(upload.id);
+        return next;
+      });
+      if (selectedUploadId === upload.id) {
+        setSelectedUploadId(null);
+        setSelectedGeometryId(null);
+      }
+      showToast('Boundary file removed', 'success');
+    } catch (err) {
+      showToast(err.message || 'Could not remove boundary file', 'error');
+    }
   };
 
   return (
@@ -349,92 +1025,87 @@ export default function MapPage() {
       {/* Map canvas */}
       <div className="gis-map">
         <MapWithNoSSR
-          selectedNode={selectedNode}
+          selectedNode={effectiveNodeId}
           onSelectNode={(id) => {
             setSelectedNode(id);
             const n = nodes.find((x) => x.id === id);
-            showToast(`Opened ${n?.name || 'monitoring area'}`, 'info');
+            showToast(`Opened ${n?.name || 'district'}`, 'info');
           }}
-          onSelectFeature={(id) => setSelectedFeatureId(id)}
-          highlightId={selectedFeatureId}
           nodeOutlines={nodeOutlines}
           kmlLayers={kmlLayers}
+          selectedUploadId={selectedUploadId}
+          selectedLayerId={activeGeometryId}
+          onSelectLayer={(layer) => {
+            setSelectedUploadId(layer.uploadId);
+            setSelectedGeometryId(layer.id);
+          }}
         />
 
-        {!selectedNode && (
+        {!effectiveNodeId && (
           <div className="map-hint-card">
-            <strong>Pick a monitoring area to begin</strong>
+            <strong>
+              {nodesLoaded && nodes.length === 0
+                ? 'No districts yet'
+                : 'Pick a district to begin'}
+            </strong>
             <span>
-              Choose an area from the Layers panel, or click any highlighted boundary on the map.
+              {nodesLoaded && nodes.length === 0
+                ? 'An administrator must create a district under Districts, then you can upload a KML.'
+                : 'Choose a district from the Layers panel, or click any highlighted boundary on the map.'}
             </span>
           </div>
         )}
 
-        {selectedFeature && (
-          <div className="map-inspector" role="dialog" aria-label="Feature details">
-            <div className="map-inspector-head">
-              <strong>{selectedFeature.properties?.name || 'Untitled feature'}</strong>
-              <button
-                type="button"
-                className="map-inspector-close"
-                aria-label="Close feature details"
-                onClick={() => setSelectedFeatureId(null)}
-              >
-                ×
-              </button>
-            </div>
-            <div className="map-inspector-meta">
-              <span>
-                Type:{' '}
-                {describeGeomType(normalizeGeomType(selectedFeature.properties?.geomType))}
-              </span>
-              {featureMeasureLines(selectedFeature.properties).map((line) => (
-                <span key={line}>{line}</span>
-              ))}
-            </div>
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={() =>
-                downloadFeatureKml(
-                  featureKey(selectedFeature),
-                  selectedFeature.properties?.name
-                )
-              }
-            >
-              Download this feature
-            </button>
-          </div>
+        {selectedUpload && (
+          <FileInspectCard
+            upload={selectedUpload}
+            sites={selectedSites}
+            selectedGeometryId={activeGeometryId}
+            color={selectedUploadColor}
+            isAdmin={isAdmin}
+            district={nodeDistrict}
+            nodeId={effectiveNodeId}
+            onSelectSite={(site) => {
+              setSelectedUploadId(site.uploadId);
+              setSelectedGeometryId(site.id);
+            }}
+            onClose={() => {
+              setSelectedUploadId(null);
+              setSelectedGeometryId(null);
+            }}
+            onSaved={refreshAfterAttributeSave}
+            onViewHistory={openActivityLog}
+            onDownloadFile={() => downloadUploadKml(selectedUpload)}
+          />
         )}
 
         {legendItems.length > 0 && (
           <div className="map-legend" role="region" aria-label="Legend">
             <div className="map-legend-title">Legend</div>
             {legendItems.map((item) => (
-              <div
-                className={`map-legend-item${selectedFeatureId === item.id ? ' active' : ''}`}
+              <button
+                type="button"
+                className={`map-legend-row${item.id === activeGeometryId ? ' active' : ''}`}
                 key={item.id}
+                onClick={() => {
+                  setSelectedUploadId(item.uploadId);
+                  setSelectedGeometryId(item.id);
+                }}
               >
-                <button
-                  type="button"
-                  className="map-legend-row"
-                  onClick={() => setSelectedFeatureId(item.id)}
-                >
-                  <span className="map-legend-swatch" style={{ background: item.color }} />
-                  <span className="map-legend-label">
-                    {item.label} · {describeGeomType(item.geomType)}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className="map-legend-dl"
-                  title="Download this feature"
-                  onClick={() => downloadFeatureKml(item.id, item.label)}
-                >
-                  Download
-                </button>
-              </div>
+                <span className="map-legend-swatch" style={{ background: item.color }} />
+                <span className="map-legend-label" title={item.label}>
+                  {item.label}
+                </span>
+                {item.area && <span className="map-legend-area">{item.area}</span>}
+              </button>
             ))}
+            {unnamedFiles.length > 0 && (
+              <p className="map-legend-note">
+                {unnamedFiles.length === 1 ? 'One file was' : `${unnamedFiles.length} files were`}{' '}
+                uploaded before site names were captured, so numbered file names are
+                shown. Re-upload to label the sites.
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -442,25 +1113,51 @@ export default function MapPage() {
       {/* Layers panel — GIS "Table of Contents" */}
       <aside className="gis-panel">
         <div className="gis-panel-head">
-          <div className="gis-panel-title">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <polygon points="12 2 2 7 12 12 22 7 12 2" />
-              <polyline points="2 17 12 22 22 17" />
-              <polyline points="2 12 12 17 22 12" />
-            </svg>
-            Layers
+          <div className="gis-panel-tabs" role="tablist" aria-label="Map sidebar">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={panelTab === 'layers'}
+              className={`gis-panel-tab${panelTab === 'layers' ? ' active' : ''}`}
+              onClick={() => setPanelTab('layers')}
+            >
+              Layers
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={panelTab === 'activity'}
+              className={`gis-panel-tab${panelTab === 'activity' ? ' active' : ''}`}
+              onClick={() => setPanelTab('activity')}
+            >
+              Activity Log
+            </button>
           </div>
-          <p className="gis-panel-desc">Monitoring areas and their uploaded boundary files.</p>
+          <p className="gis-panel-desc">
+            {panelTab === 'activity'
+              ? 'Attribute edits for site name, district, survey date, and KML type. Search by site code.'
+              : 'Districts and their uploaded boundary files. Click a file to inspect its sites.'}
+          </p>
         </div>
 
+        {panelTab === 'activity' ? (
+          <ActivityLogPanel
+            key={`${activitySiteFilter}|${activityGeometryId}`}
+            initialSite={activitySiteFilter}
+            initialGeometryId={activityGeometryId}
+          />
+        ) : null}
+
+        {panelTab === 'layers' ? (
+        <>
         <div className="gis-field">
-          <label htmlFor="area-picker">Monitoring area</label>
+          <label htmlFor="area-picker">District</label>
           <select
             id="area-picker"
-            value={selectedNode || ''}
+            value={effectiveNodeId || ''}
             onChange={(e) => setSelectedNode(e.target.value || null)}
           >
-            <option value="">Select an area…</option>
+            <option value="">Select a district…</option>
             {nodes.map((n) => (
               <option key={n.id} value={n.id}>
                 {n.name}
@@ -470,23 +1167,26 @@ export default function MapPage() {
           </select>
           {nodes.length === 0 && (
             <p className="help-text">
-              No areas yet. Create one under “Areas”, then upload a KML/KMZ boundary.
+              No districts yet. An administrator can create one under “Districts”, then upload a KML/KMZ boundary.
             </p>
           )}
         </div>
 
-        {!selectedNode ? (
+        {!effectiveNodeId ? (
           <div className="gis-empty">
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4m0 13V4m0 0L9 7" />
             </svg>
-            <h3>No area selected</h3>
-            <p>Select a monitoring area above to view and toggle its boundary layers on the map.</p>
+            <h3>No district selected</h3>
+            <p>Select a district above to view and toggle its boundary layers on the map.</p>
           </div>
         ) : (
           <>
             <div className="gis-area-head">
-              <div className="gis-area-name" title={nodeName}>{nodeName}</div>
+              <div>
+                <div className="gis-area-name" title={nodeName}>{nodeName}</div>
+                {nodeDistrict ? <div className="gis-area-district">{nodeDistrict}</div> : null}
+              </div>
               <span className={`tag ${(activeNodeObj?.status || 'active').toLowerCase() === 'active' ? 'tag-green' : 'tag'}`}>
                 {(activeNodeObj?.status || 'active').toUpperCase()}
               </span>
@@ -545,44 +1245,79 @@ export default function MapPage() {
               ) : (
                 uploads.map((u, index) => {
                   const on = shownUploads.has(u.id);
+                  const selected = selectedUploadId === u.id;
                   const picked = downloadSelected.has(u.id);
                   return (
-                    <div className={`layer-row${on ? ' on' : ''}${picked ? ' picked' : ''}`} key={u.id}>
+                    <div
+                      className={`layer-row${on ? ' on' : ''}${selected ? ' selected' : ''}${picked ? ' picked' : ''}`}
+                      key={u.id}
+                      onClick={() => selectUpload(u)}
+                    >
                       <input
                         type="checkbox"
                         className="layer-check"
                         checked={on}
+                        onClick={(e) => e.stopPropagation()}
                         onChange={() => toggleShow(u.id)}
                         title="Show on map"
-                        aria-label={`Show ${u.kmlFilePath || 'layer'} on map`}
+                        aria-label={`Show ${u.kmlFilePath || 'boundary layer'} on map`}
                       />
                       <input
                         type="checkbox"
                         className="layer-check layer-check-download"
                         checked={picked}
+                        onClick={(e) => e.stopPropagation()}
                         onChange={() => toggleDownloadSelect(u.id)}
                         title="Select for download"
-                        aria-label={`Select ${u.kmlFilePath || 'layer'} for download`}
+                        aria-label={`Select ${u.kmlFilePath || 'boundary layer'} for download`}
                       />
-                      <span className="layer-swatch" style={{ background: colorForIndex(index) }} />
-                      <span className="layer-info">
-                        <span className="layer-name" title={u.kmlFilePath || 'Boundary layer'}>
-                          {u.kmlFilePath || 'Boundary layer'}
+                      <button
+                        type="button"
+                        className="layer-select"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          selectUpload(u);
+                        }}
+                      >
+                        <span className="layer-swatch" style={{ background: colorForIndex(index) }} />
+                        <span className="layer-info">
+                          <span className="layer-name" title={u.kmlFilePath || 'Boundary layer'}>
+                            {u.kmlFilePath || 'Boundary layer'}
+                          </span>
+                          <span className="layer-meta">
+                            {typeof u.uploadDate === 'string' ? u.uploadDate.split('T')[0] : '—'}
+                            {' · '}
+                            {u.geometryCount ?? 0} feature(s)
+                            {u.uploadedBy ? ` · ${u.uploadedBy}` : ''}
+                          </span>
                         </span>
-                        <span className="layer-meta">
-                          {typeof u.uploadDate === 'string' ? u.uploadDate.split('T')[0] : '—'}
-                          {' · '}
-                          {u.geometryCount ?? 0} feature(s)
-                          {u.uploadedBy ? ` · ${u.uploadedBy}` : ''}
-                        </span>
-                      </span>
+                      </button>
                       <button
                         type="button"
                         className="btn btn-outline btn-sm layer-kml-btn"
-                        onClick={() => downloadFileKml(u)}
+                        title="Download every feature in this file as KML"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          downloadUploadKml(u);
+                        }}
                       >
                         Download KML
                       </button>
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-sm"
+                          title="Remove this boundary file"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            deleteLayer(u);
+                          }}
+                        >
+                          Remove
+                        </button>
+                      )}
                     </div>
                   );
                 })
@@ -606,6 +1341,8 @@ export default function MapPage() {
             </div>
           </>
         )}
+        </>
+        ) : null}
       </aside>
 
       {breachModal && (
@@ -635,8 +1372,8 @@ export default function MapPage() {
                 <button type="button" className="btn btn-outline" onClick={() => setBreachModal(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-danger">
-                  Record breach notice
+                <button type="submit" className="btn btn-danger" disabled={savingBreach}>
+                  {savingBreach ? 'Recording…' : 'Record breach notice'}
                 </button>
               </div>
             </form>

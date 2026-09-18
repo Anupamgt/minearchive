@@ -2,6 +2,7 @@ import { prisma } from '../../../lib/db';
 import { getSessionUser, unauthorizedResponse, forbiddenResponse } from '../../../lib/auth';
 import { getCachedUsers, CACHE_TAGS } from '../../../lib/cached-queries';
 import { privateJson, bustTags } from '../../../lib/cache-headers';
+import { serializeUser } from '../../../lib/site-access';
 
 export async function GET(request) {
   const session = await getSessionUser(request);
@@ -56,16 +57,7 @@ export async function POST(request) {
 
     bustTags(CACHE_TAGS.users, CACHE_TAGS.audit);
 
-    return privateJson(
-      {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        status: user.status,
-      },
-      { status: 201 }
-    );
+    return privateJson(serializeUser(user), { status: 201 });
   } catch (error) {
     console.error('POST /api/users error:', error);
     return privateJson({ error: 'Failed to create user' }, { status: 500 });

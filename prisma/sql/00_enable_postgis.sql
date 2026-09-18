@@ -1,5 +1,6 @@
 -- Run against the Supabase *direct* connection (port 5432), not the transaction pooler.
--- MineArchive stores KML polygons in UploadGeometry.geom (geometry(Polygon, 4326)).
+-- MineArchive stores KML polygons, polylines, and points in
+-- UploadGeometry.geom (geometry(Geometry, 4326)).
 
 CREATE EXTENSION IF NOT EXISTS postgis;
 
