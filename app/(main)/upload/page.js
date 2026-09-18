@@ -5,15 +5,25 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '../../components/ToastProvider';
 import './upload.css';
 
-function previewPolygonsFromKmlText(text) {
+function previewFeaturesFromKmlText(text) {
   try {
     const doc = new DOMParser().parseFromString(text, 'text/xml');
     const placemarks = Array.from(doc.getElementsByTagName('Placemark'));
     return placemarks.map((pm, idx) => {
-      const name =
-        pm.getElementsByTagName('name')[0]?.textContent?.trim() || `Polygon ${idx + 1}`;
+      const name = pm.getElementsByTagName('name')[0]?.textContent?.trim() || '';
       const hasPolygon = pm.getElementsByTagName('Polygon').length > 0;
-      return { polygon: name, status: hasPolygon ? 'Ready' : 'Skipped', node: '—' };
+      const hasLine = pm.getElementsByTagName('LineString').length > 0;
+      const hasPoint = pm.getElementsByTagName('Point').length > 0;
+      let kind = 'Feature';
+      if (hasPolygon) kind = 'Polygon';
+      else if (hasLine) kind = 'Polyline';
+      else if (hasPoint) kind = 'Point';
+      const ready = hasPolygon || hasLine || hasPoint;
+      return {
+        polygon: name || `${kind} ${idx + 1}`,
+        status: ready ? 'Ready' : 'Skipped',
+        node: '—',
+      };
     });
   } catch {
     return [];
@@ -74,11 +84,11 @@ export default function UploadPage() {
       }
       try {
         const text = await f.text();
-        const polys = previewPolygonsFromKmlText(text);
-        if (polys.length === 0) {
-          previews.push({ polygon: f.name, status: 'No polygons', node: '—' });
+        const features = previewFeaturesFromKmlText(text);
+        if (features.length === 0) {
+          previews.push({ polygon: f.name, status: 'No features', node: '—' });
         } else {
-          for (const p of polys) {
+          for (const p of features) {
             previews.push({
               polygon: `${f.name} · ${p.polygon}`,
               status: p.status,
@@ -140,11 +150,11 @@ export default function UploadPage() {
 
       if (res.ok && data.uploaded > 0) {
         showToast(
-          `Ingested ${data.uploaded} file(s), ${data.featuresDetected || 0} polygon(s).`,
+          `Ingested ${data.uploaded} file(s), ${data.featuresDetected || 0} feature(s).`,
           'success'
         );
         // Open the map focused on the node we just uploaded to, so the new
-        // polygons are shown immediately (the map auto-selects this node).
+        // features are shown immediately (the map auto-selects this node).
         setTimeout(() => router.push(`/map?nodeId=${encodeURIComponent(nodeId)}`), 1000);
       } else {
         const firstError = data.results?.find((r) => !r.success)?.error;
@@ -162,7 +172,7 @@ export default function UploadPage() {
         <div>
           <h1>Upload Boundary File</h1>
           <p className="page-subtitle">
-            Add a KML or KMZ boundary file to a monitoring area. Each file is archived as a dated survey and shown on the map.
+            Add a KML or KMZ file to a monitoring area. Polygons, polylines, and points are archived as a dated survey and shown on the map.
           </p>
         </div>
       </div>
@@ -198,7 +208,7 @@ export default function UploadPage() {
                   : 'Drop a KML or KMZ file here, or click to browse'}
               </div>
               <div className="drop-zone-hint">
-                Accepts KML or KMZ boundary files · you can add more than one
+                Accepts KML or KMZ with polygons, polylines, and points · you can add more than one
               </div>
             </div>
 
@@ -287,7 +297,7 @@ export default function UploadPage() {
           <div className="card-body">
             {detectedAreas.length === 0 ? (
               <p className="help-text" style={{ marginTop: 0 }}>
-                Add a KML or KMZ file above to preview the boundaries it contains.
+                Add a KML or KMZ file above to preview the features it contains.
               </p>
             ) : (
               <table className="table">

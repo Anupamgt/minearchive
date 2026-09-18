@@ -125,6 +125,18 @@ const prisma2 = new PrismaClient({
   datasources: { db: { url: directUrl } },
 });
 try {
+  console.log('→ Ensuring mixed Geometry column (polygons, polylines, points)…');
+  await prisma2.$executeRawUnsafe(`
+    ALTER TABLE "UploadGeometry"
+      ALTER COLUMN geom TYPE geometry(Geometry, 4326)
+      USING geom;
+  `);
+  await prisma2.$executeRawUnsafe(`
+    ALTER TABLE "UploadGeometry" ADD COLUMN IF NOT EXISTS name TEXT;
+  `);
+  await prisma2.$executeRawUnsafe(`
+    ALTER TABLE "UploadGeometry" ADD COLUMN IF NOT EXISTS "geomType" TEXT;
+  `);
   console.log('→ Ensuring GIST index on UploadGeometry.geom…');
   await prisma2.$executeRawUnsafe(`
     CREATE INDEX IF NOT EXISTS upload_geometry_geom_idx

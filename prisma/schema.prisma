@@ -57,16 +57,18 @@ model Upload {
   attachments  UploadAttachment[]
 }
 
-// Prisma doesn't natively support PostGIS geometry columns well. 
+// Prisma doesn't natively support PostGIS geometry columns well.
 // We use Unsupported("geometry") and raw SQL for queries.
+// Mixed Geometry (not Polygon-only) so KML polylines and points can be stored.
 model UploadGeometry {
   id              String   @id @default(uuid())
   uploadId        String
   upload          Upload   @relation(fields: [uploadId], references: [id])
-  
-  // Storing geometry as Unsupported
-  geom            Unsupported("geometry(Polygon, 4326)")?
-  
+
+  geom            Unsupported("geometry(Geometry, 4326)")?
+  name            String?
+  geomType        String?  // Polygon | LineString | Point
+
   areaHectares    Float?
   perimeterMeters Float?
 }

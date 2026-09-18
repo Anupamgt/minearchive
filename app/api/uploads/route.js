@@ -6,7 +6,7 @@ import { prisma } from '../../../lib/db';
 import { getSessionUser, unauthorizedResponse } from '../../../lib/auth';
 import { getCachedUploads, CACHE_TAGS } from '../../../lib/cached-queries';
 import { privateJson, bustTags } from '../../../lib/cache-headers';
-import { polygonsFromGeoJson } from '../../../lib/kml';
+import { featuresFromGeoJson, sanitizeKmlXml } from '../../../lib/kml';
 
 /**
  * Read the KML text out of an uploaded file, transparently handling KMZ.
@@ -56,16 +56,16 @@ export async function GET(request) {
 }
 
 async function processOneKmlFile({ file, nodeId, category, surveyDate, notes, uploadedBy, userId }) {
-  const text = await extractKmlText(file);
+  const text = sanitizeKmlXml(await extractKmlText(file));
   const kmlDom = new DOMParser().parseFromString(text, 'text/xml');
   const geoJson = kml(kmlDom);
-  const polygons = polygonsFromGeoJson(geoJson);
+  const features = featuresFromGeoJson(geoJson);
 
-  if (polygons.length === 0) {
+  if (features.length === 0) {
     return {
       success: false,
       fileName: file.name,
-      error: 'No Polygon/MultiPolygon features found in KML',
+      error: 'No polygon, polyline, or point features found in KML',
     };
   }
 
@@ -94,30 +94,51 @@ async function processOneKmlFile({ file, nodeId, category, surveyDate, notes, up
   });
 
   let parsedFeatures = 0;
-  for (const poly of polygons) {
+  const typeCounts = { Polygon: 0, LineString: 0, Point: 0 };
+  for (const feat of features) {
     const geomJson = JSON.stringify({
-      type: 'Polygon',
-      coordinates: poly.coordinates,
+      type: feat.type,
+      coordinates: feat.coordinates,
     });
     const id = randomUUID();
-    // Force 2D — KML coordinates often include altitude (Z) which Polygon,4326 rejects.
+    // Force 2D — KML coordinates often include altitude (Z).
     await prisma.$executeRawUnsafe(
       `
-      INSERT INTO "UploadGeometry" ("id", "uploadId", "geom", "areaHectares", "perimeterMeters")
+      INSERT INTO "UploadGeometry" ("id", "uploadId", "geom", "name", "geomType", "areaHectares", "perimeterMeters")
       VALUES (
         $1,
         $2,
         ST_Force2D(ST_SetSRID(ST_GeomFromGeoJSON($3), 4326)),
-        ST_Area(ST_Force2D(ST_SetSRID(ST_GeomFromGeoJSON($3), 4326))::geography) / 10000.0,
-        ST_Perimeter(ST_Force2D(ST_SetSRID(ST_GeomFromGeoJSON($3), 4326))::geography)
+        $4,
+        $5,
+        CASE
+          WHEN $5 = 'Polygon' THEN ST_Area(ST_Force2D(ST_SetSRID(ST_GeomFromGeoJSON($3), 4326))::geography) / 10000.0
+          ELSE NULL
+        END,
+        CASE
+          WHEN $5 = 'Polygon' THEN ST_Perimeter(ST_Force2D(ST_SetSRID(ST_GeomFromGeoJSON($3), 4326))::geography)
+          WHEN $5 = 'LineString' THEN ST_Length(ST_Force2D(ST_SetSRID(ST_GeomFromGeoJSON($3), 4326))::geography)
+          ELSE NULL
+        END
       )
       `,
       id,
       upload.id,
-      geomJson
+      geomJson,
+      feat.name || null,
+      feat.type
     );
     parsedFeatures++;
+    if (typeCounts[feat.type] !== undefined) typeCounts[feat.type] += 1;
   }
+
+  const summary = [
+    typeCounts.Polygon ? `${typeCounts.Polygon} polygon(s)` : null,
+    typeCounts.LineString ? `${typeCounts.LineString} polyline(s)` : null,
+    typeCounts.Point ? `${typeCounts.Point} point(s)` : null,
+  ]
+    .filter(Boolean)
+    .join(', ');
 
   await prisma.auditLog.create({
     data: {
@@ -125,7 +146,7 @@ async function processOneKmlFile({ file, nodeId, category, surveyDate, notes, up
       action: 'Upload KML',
       targetType: 'Upload',
       targetId: upload.id,
-      details: `Uploaded KML ${file.name} (${parsedFeatures} polygons detected)`,
+      details: `Uploaded KML ${file.name} (${summary || `${parsedFeatures} feature(s)`})`,
     },
   });
 
@@ -135,6 +156,7 @@ async function processOneKmlFile({ file, nodeId, category, surveyDate, notes, up
     uploadId: upload.id,
     nodeId: resolvedNodeId,
     featuresDetected: parsedFeatures,
+    typeCounts,
   };
 }
 
