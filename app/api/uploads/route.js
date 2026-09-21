@@ -1,5 +1,4 @@
 import { randomUUID } from 'crypto';
-import JSZip from 'jszip';
 import { DOMParser } from '@xmldom/xmldom';
 import { kml } from '@tmcw/togeojson';
 import { prisma } from '../../../lib/db';
@@ -7,39 +6,14 @@ import { getSessionUser, unauthorizedResponse } from '../../../lib/auth';
 import { getCachedUploads, CACHE_TAGS } from '../../../lib/cached-queries';
 import { privateJson, bustTags } from '../../../lib/cache-headers';
 import { featuresFromGeoJson, fileStem, sanitizeKmlXml } from '../../../lib/kml';
+import {
+  KmlIngestError,
+  assertFeatureCount,
+  countPlacemarks,
+  extractKmlText,
+} from '../../../lib/kml-ingest';
 import { normalizeKmlType } from '../../../lib/attribute-log';
 import { ensureGisSchema } from '../../../lib/gis-schema';
-
-/**
- * Read the KML text out of an uploaded file, transparently handling KMZ.
- * A KMZ is a ZIP archive (magic bytes `PK\x03\x04`) that contains one or more
- * `.kml` documents (conventionally `doc.kml`) plus optional assets.
- */
-async function extractKmlText(file) {
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const isZip =
-    buffer.length > 3 &&
-    buffer[0] === 0x50 &&
-    buffer[1] === 0x4b &&
-    buffer[2] === 0x03 &&
-    buffer[3] === 0x04;
-  const looksKmz = /\.kmz$/i.test(file.name || '') || isZip;
-
-  if (!looksKmz) {
-    return buffer.toString('utf8');
-  }
-
-  const zip = await JSZip.loadAsync(buffer);
-  const kmlEntries = Object.keys(zip.files).filter(
-    (name) => /\.kml$/i.test(name) && !zip.files[name].dir
-  );
-  if (kmlEntries.length === 0) {
-    throw new Error('KMZ archive contains no .kml document');
-  }
-  const chosen =
-    kmlEntries.find((name) => /(^|\/)doc\.kml$/i.test(name)) || kmlEntries[0];
-  return zip.files[chosen].async('string');
-}
 
 export async function GET(request) {
   const session = await getSessionUser(request);
@@ -67,9 +41,12 @@ async function processOneKmlFile({
   userId,
 }) {
   const text = sanitizeKmlXml(await extractKmlText(file));
+  const placemarkCount = countPlacemarks(text);
+  assertFeatureCount(placemarkCount);
   const kmlDom = new DOMParser().parseFromString(text, 'text/xml');
   const geoJson = kml(kmlDom);
   const features = featuresFromGeoJson(geoJson);
+  assertFeatureCount(features.length);
 
   if (features.length === 0) {
     return {
@@ -244,11 +221,12 @@ export async function POST(request) {
         });
         results.push(result);
       } catch (err) {
-        console.error('KML process error:', err);
+        const isLimit = err instanceof KmlIngestError || err?.name === 'KmlIngestError';
+        if (!isLimit) console.error('KML process error:', err);
         results.push({
           success: false,
           fileName: file.name,
-          error: err.message || 'Failed to process KML',
+          error: isLimit ? err.message : err.message || 'Failed to process KML',
         });
       }
     }

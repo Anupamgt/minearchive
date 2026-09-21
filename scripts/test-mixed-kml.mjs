@@ -9,12 +9,25 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DOMParser } from '@xmldom/xmldom';
 import { kml } from '@tmcw/togeojson';
+import JSZip from 'jszip';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const kmlSource = readFileSync(join(root, 'lib', 'kml.js'), 'utf8');
-const { featuresFromGeoJson, sanitizeKmlXml } = await import(
-  `data:text/javascript;charset=utf-8,${encodeURIComponent(kmlSource)}`
-);
+const {
+  featuresFromGeoJson,
+  sanitizeKmlXml,
+  safeKmlFilename,
+  sanitizeKmlFilename,
+} = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(kmlSource)}`);
+
+const ingestSource = readFileSync(join(root, 'lib', 'kml-ingest.js'), 'utf8');
+const {
+  KmlIngestError,
+  KML_LIMITS,
+  assertSafeZipEntryName,
+  extractKmlText,
+  inspectKmzCentralDirectory,
+} = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(ingestSource)}`);
 
 function parseKmlFile(filePath) {
   const text = sanitizeKmlXml(readFileSync(filePath, 'utf8'));
@@ -118,5 +131,47 @@ if (existsSync(sas)) {
 } else {
   console.log('⚠ sample missing:', sas);
 }
+
+const injectedName = safeKmlFilename('lease\r\nHidden.kml', 'upload-abc123.kml');
+assert.equal(injectedName, 'upload-abc123.kml');
+assert.equal(injectedName.includes('\r') || injectedName.includes('\n'), false);
+assert.equal(safeKmlFilename('foo\0bar.kml', 'upload-abc123.kml'), 'upload-abc123.kml');
+assert.equal(sanitizeKmlFilename('ok\rcode', 'geom-1'), 'feature-geom-1.kml');
+console.log('✔ safeKmlFilename strips CR/LF/NUL');
+
+assert.throws(
+  () => assertSafeZipEntryName('../doc.kml'),
+  (err) => err instanceof KmlIngestError
+);
+assert.throws(
+  () => assertSafeZipEntryName('nested.kmz'),
+  (err) => err instanceof KmlIngestError
+);
+
+const zip = new JSZip();
+zip.file('a.kml', '<kml xmlns="http://www.opengis.net/kml/2.2"></kml>');
+zip.file('b.kml', '<kml xmlns="http://www.opengis.net/kml/2.2"></kml>');
+zip.file('c.txt', 'x');
+const tooManyEntries = await zip.generateAsync({ type: 'nodebuffer' });
+assert.throws(
+  () => inspectKmzCentralDirectory(tooManyEntries, { ...KML_LIMITS, MAX_ZIP_ENTRIES: 2 }),
+  (err) => err instanceof KmlIngestError && /too many entries/i.test(err.message)
+);
+
+const tinyKml =
+  '<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document/></kml>';
+const okZip = new JSZip();
+okZip.file('doc.kml', tinyKml);
+const okKmz = await okZip.generateAsync({ type: 'nodebuffer' });
+const extracted = await extractKmlText(
+  { name: 'layer.kmz', size: okKmz.length, arrayBuffer: async () => okKmz },
+);
+assert.match(extracted, /<kml\b/i);
+
+await assert.rejects(
+  () => extractKmlText(Buffer.alloc(64), { MAX_UPLOAD_BYTES: 16 }),
+  (err) => err instanceof KmlIngestError && /too large/i.test(err.message)
+);
+console.log('✔ KMZ ingest rejects oversize zip/entry counts');
 
 console.log('All mixed-geometry parse checks passed.');

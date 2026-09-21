@@ -8,6 +8,7 @@ import {
   geometryToKml,
   inspectDistrict,
   inspectSiteName,
+  kmlAttachmentDisposition,
   sanitizeKmlFilename,
 } from '../../../../../lib/kml';
 
@@ -82,7 +83,7 @@ export async function GET(request, { params }) {
       status: 200,
       headers: {
         'Content-Type': 'application/vnd.google-earth.kml+xml; charset=utf-8',
-        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Disposition': kmlAttachmentDisposition(filename, `feature-${row.id}.kml`),
         'Cache-Control': 'private, no-store',
       },
     });

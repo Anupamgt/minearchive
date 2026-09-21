@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '../../../../../lib/db';
 import { getSessionUser, unauthorizedResponse } from '../../../../../lib/auth';
 import { loadGeometryFeatures } from '../../../../../lib/geometry-query';
-import { geoJsonFeaturesToKml, safeKmlFilename } from '../../../../../lib/kml';
+import { fileStem, geoJsonFeaturesToKml, kmlAttachmentDisposition, safeKmlFilename } from '../../../../../lib/kml';
 import { ensureGisSchema } from '../../../../../lib/gis-schema';
 
 /**
@@ -21,17 +21,18 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: 'No features found for this file' }, { status: 404 });
     }
 
-    const fileName = safeKmlFilename(
-      features[0].properties?.kmlFilePath,
-      `upload-${id}.kml`
+    const originalPath = features[0].properties?.kmlFilePath;
+    const fileName = safeKmlFilename(originalPath, `upload-${id}.kml`);
+    const kml = geoJsonFeaturesToKml(
+      features,
+      fileStem(originalPath) || 'MineArchive export'
     );
-    const kml = geoJsonFeaturesToKml(features, fileName.replace(/\.kml$/i, ''));
 
     return new NextResponse(kml, {
       status: 200,
       headers: {
         'Content-Type': 'application/vnd.google-earth.kml+xml; charset=utf-8',
-        'Content-Disposition': `attachment; filename="${fileName}"`,
+        'Content-Disposition': kmlAttachmentDisposition(fileName, `upload-${id}.kml`),
         'Cache-Control': 'private, no-store',
       },
     });
